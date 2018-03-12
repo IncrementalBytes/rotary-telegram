@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_height="match_parent"
+  android:layout_width="match_parent">
+
+  <!--<fragment-->
+    <!--xmlns:android="http://schemas.android.com/apk/res/android"-->
+    <!--android:id="@+id/mapping_fragment_map"-->
+    <!--android:layout_width="match_parent"-->
+    <!--android:layout_height="match_parent"-->
+    <!--class="com.google.android.gms.maps.MapView" />-->
+
+  <!--<ImageView-->
+    <!--android:id="@+id/mapping_image_view"-->
+    <!--android:layout_width="match_parent"-->
+    <!--android:layout_height="match_parent"-->
+    <!--android:background="@android:color/transparent" />-->
+  <!--<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"-->
+  <!--android:layout_width="match_parent"-->
+  <!--android:layout_height="match_parent"-->
+  <!--android:id="@+id/fragment_mapping">-->
+
+  <com.google.android.gms.maps.MapView
+    android:id="@+id/mapping_map_view"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" />
+
+<!--</android.support.constraint.ConstraintLayout>-->
+</android.support.constraint.ConstraintLayout>
