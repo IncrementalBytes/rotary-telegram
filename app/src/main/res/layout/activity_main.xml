@@ -30,16 +30,6 @@
       android:id="@+id/main_fragment_container"
       android:layout_width="match_parent"
       android:layout_height="match_parent"/>
-    <android.support.design.widget.FloatingActionButton
-      android:id="@+id/main_button_share_location"
-      android:layout_width="wrap_content"
-      android:layout_height="wrap_content"
-      android:layout_margin="@dimen/fab_margin"
-      android:layout_gravity="bottom|end"
-      android:clickable="true"
-      android:elevation="5dp"
-      android:focusable="true"
-      app:srcCompat="@drawable/ic_sharing_off_dark"/>
   </FrameLayout>
 
   <TextView
@@ -77,5 +67,16 @@
     app:layout_constraintBottom_toBottomOf="@+id/main_text_timestamp_header"
     app:layout_constraintStart_toEndOf="@id/main_text_timestamp_header"
     app:layout_constraintTop_toTopOf="@+id/main_text_timestamp_header"/>
+  <android.support.design.widget.FloatingActionButton
+    android:id="@+id/main_button_share_location"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_margin="@dimen/fab_margin"
+    android:clickable="true"
+    android:elevation="5dp"
+    android:focusable="true"
+    app:srcCompat="@drawable/ic_sharing_off_dark"
+    app:layout_constraintBottom_toBottomOf="parent"
+    app:layout_constraintEnd_toEndOf="parent"/>
 
 </android.support.constraint.ConstraintLayout>

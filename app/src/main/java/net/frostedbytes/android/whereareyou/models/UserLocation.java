@@ -1,14 +1,10 @@
 package net.frostedbytes.android.whereareyou.models;
 
-import com.google.firebase.database.Exclude;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
 public class UserLocation implements Serializable {
-
-  @Exclude
-  public static final String ROOT = "UserLocations";
 
   /**
    * The latitude value for this location.

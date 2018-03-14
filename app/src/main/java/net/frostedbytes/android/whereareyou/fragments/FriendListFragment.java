@@ -24,7 +24,6 @@ import java.util.Locale;
 import net.frostedbytes.android.whereareyou.BaseActivity;
 import net.frostedbytes.android.whereareyou.R;
 import net.frostedbytes.android.whereareyou.models.User;
-import net.frostedbytes.android.whereareyou.models.UserFriend;
 import net.frostedbytes.android.whereareyou.utils.DateUtils;
 import net.frostedbytes.android.whereareyou.utils.LogUtils;
 
@@ -45,7 +44,7 @@ public class FriendListFragment extends Fragment {
 
   private RecyclerView mRecyclerView;
 
-  private List<UserFriend> mUserFriends;
+  private List<User> mFriends;
   private String mUserId;
 
   private Query mFriendsQuery;
@@ -69,7 +68,7 @@ public class FriendListFragment extends Fragment {
 
     mRecyclerView = view.findViewById(R.id.friend_list_view);
 
-    mUserFriends = null;
+    mFriends = null;
     String queryPath = User.USERS_ROOT + "/" + mUserId + "/" + User.USER_FRIENDS_ROOT;
     LogUtils.debug(TAG, "QueryPath: %s", queryPath);
     mFriendsQuery = FirebaseDatabase.getInstance().getReference().child(queryPath);
@@ -78,12 +77,12 @@ public class FriendListFragment extends Fragment {
       @Override
       public void onDataChange(DataSnapshot dataSnapshot) {
 
-        mUserFriends = new ArrayList<>();
+        mFriends = new ArrayList<>();
         for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
-          UserFriend userFriend = snapshot.getValue(UserFriend.class);
-          if (userFriend != null) {
-            userFriend.UserId = snapshot.getKey();
-            mUserFriends.add(userFriend);
+          User friend = snapshot.getValue(User.class);
+          if (friend != null) {
+            friend.UserId = snapshot.getKey();
+            mFriends.add(friend);
           }
         }
 
@@ -136,21 +135,21 @@ public class FriendListFragment extends Fragment {
   private void updateUI() {
 
     LogUtils.debug(TAG, "++updateUI()");
-    if (mUserFriends != null && !mUserFriends.isEmpty()) {
-      FriendAdapter friendAdapter = new FriendAdapter(new ArrayList<>(mUserFriends));
+    if (mFriends != null && !mFriends.isEmpty()) {
+      FriendAdapter friendAdapter = new FriendAdapter(new ArrayList<>(mFriends));
       mRecyclerView.setAdapter(friendAdapter);
       mRecyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
       mCallback.onPopulated(friendAdapter.getItemCount()); // signal activity to dismiss progress dialog
-    } else if (mUserFriends != null && mUserFriends.isEmpty()) {
+    } else if (mFriends != null && mFriends.isEmpty()) {
       mCallback.onNoFriends();
     }
   }
 
   class FriendAdapter extends RecyclerView.Adapter<FriendHolder> {
 
-    private List<UserFriend> mFriends;
+    private List<User> mFriends;
 
-    FriendAdapter(List<UserFriend> friends) {
+    FriendAdapter(List<User> friends) {
 
       mFriends = friends;
     }
@@ -166,8 +165,8 @@ public class FriendListFragment extends Fragment {
     @Override
     public void onBindViewHolder(@NonNull FriendHolder holder, int position) {
 
-      UserFriend userFriend = mFriends.get(position);
-      holder.bind(userFriend);
+      User friend = mFriends.get(position);
+      holder.bind(friend);
     }
 
     @Override
@@ -182,7 +181,7 @@ public class FriendListFragment extends Fragment {
     private final TextView mStatusTextView;
     private final TextView mLastKnownDateTextView;
 
-    private UserFriend mUserFriend;
+    private User mFriend;
 
     FriendHolder(LayoutInflater inflater, ViewGroup parent) {
       super(inflater.inflate(R.layout.friend_item, parent, false));
@@ -193,11 +192,11 @@ public class FriendListFragment extends Fragment {
       mLastKnownDateTextView = itemView.findViewById(R.id.friend_item_last_timestamp);
     }
 
-    void bind(UserFriend userFriend) {
+    void bind(User friend) {
 
-      mUserFriend = userFriend;
-      mNameTextView.setText(userFriend.FullName);
-      if (userFriend.IsSharing) {
+      mFriend = friend;
+      mNameTextView.setText(friend.FullName);
+      if (friend.IsSharing) {
         mStatusTextView.setTextColor(Color.GREEN);
         mStatusTextView.setTypeface(null, Typeface.ITALIC);
       } else {
@@ -205,10 +204,10 @@ public class FriendListFragment extends Fragment {
         mStatusTextView.setTypeface(null, Typeface.NORMAL);
       }
 
-      mStatusTextView.setText(userFriend.IsSharing ? getString(R.string.status_sharing) : getString(R.string.status_not_sharing));
-      if (userFriend.LocationList != null && userFriend.LocationList.size() > 0) {
+      mStatusTextView.setText(friend.IsSharing ? getString(R.string.status_sharing) : getString(R.string.status_not_sharing));
+      if (friend.LocationList != null && friend.LocationList.size() > 0) {
         List<String> locationKeys = new ArrayList<>();
-        locationKeys.addAll(userFriend.LocationList.keySet());
+        locationKeys.addAll(friend.LocationList.keySet());
         Collections.sort(locationKeys);
         mLastKnownDateTextView.setText(
           String.format(
@@ -224,8 +223,8 @@ public class FriendListFragment extends Fragment {
     @Override
     public void onClick(View view) {
 
-      LogUtils.debug(TAG, "%s clicked.", mUserFriend.FullName);
-      mCallback.onSelected(mUserFriend.UserId);
+      LogUtils.debug(TAG, "%s clicked.", mFriend.FullName);
+      mCallback.onSelected(mFriend.UserId);
     }
   }
 }

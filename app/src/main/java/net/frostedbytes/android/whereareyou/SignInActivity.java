@@ -96,21 +96,26 @@ public class SignInActivity extends BaseActivity implements OnClickListener {
       if (result.isSuccess()) {
         GoogleSignInAccount account = result.getSignInAccount();
         showProgressDialog(getString(R.string.status_authenticating));
-        AuthCredential credential = GoogleAuthProvider.getCredential(account.getIdToken(), null);
-        mAuth.signInWithCredential(credential)
-          .addOnCompleteListener(this, task -> {
-            if (task.isSuccessful()) {
-              onAuthenticateSuccess(mAuth.getCurrentUser());
-            } else {
-              LogUtils.error(
-                TAG,
-                "Authenticating with Google account failed: %1s",
-                task.getException() != null ? task.getException().getMessage() : "");
-              Snackbar.make(findViewById(R.id.activity_sign_in), "Authenticating failed.", Snackbar.LENGTH_SHORT).show();
-            }
+        if (account != null) {
+          AuthCredential credential = GoogleAuthProvider.getCredential(account.getIdToken(), null);
+          mAuth.signInWithCredential(credential)
+            .addOnCompleteListener(this, task -> {
+              if (task.isSuccessful()) {
+                onAuthenticateSuccess(mAuth.getCurrentUser());
+              } else {
+                LogUtils.error(
+                  TAG,
+                  "Authenticating with Google account failed: %1s",
+                  task.getException() != null ? task.getException().getMessage() : "");
+                Snackbar.make(findViewById(R.id.activity_sign_in), "Authenticating failed.", Snackbar.LENGTH_SHORT).show();
+              }
 
-            hideProgressDialog();
-          });
+              hideProgressDialog();
+            });
+        } else {
+          LogUtils.error(TAG, "Unable to get sign-in account from authentication result.");
+          Snackbar.make(findViewById(R.id.activity_sign_in), "Sign-in result was unexpected.", Snackbar.LENGTH_SHORT).show();
+        }
       } else {
         LogUtils.error(TAG, "Getting task result failed: %1s", result.getStatus());
         Snackbar.make(findViewById(R.id.activity_sign_in), "Could not sign-in with Google.", Snackbar.LENGTH_SHORT).show();

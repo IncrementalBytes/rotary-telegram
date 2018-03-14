@@ -31,7 +31,7 @@ exports.onIsSharingWrite = functions.database.ref(`/Users/{uid}/IsSharing`).onWr
   }
 })
 
-exports.onLocationUpdated = functions.database.ref(`/Users/{uid}/UserLocations/{timestamp}`).onCreate((event) => {
+exports.onLocationUpdated = functions.database.ref(`/Users/{uid}/LocationList/{timestamp}`).onCreate((event) => {
 
   const previousVal = event.data.previous.val()
   const currentVal = event.data.val()

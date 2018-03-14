@@ -56,13 +56,13 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
 
   private ActionBar mActionBar;
   private FragmentManager mFragmentManager;
-  private FloatingActionButton mSharingActionButton;
+  private MenuItem mManageUserMenuItem;
+  private MenuItem mSettingsMenuItem;
+  private FloatingActionButton mSharingButton;
   private TextView mStatusHeaderTextView;
   private TextView mStatusTextView;
   private TextView mTimeStampHeaderTextView;
   private TextView mTimeStampTextView;
-  private MenuItem mSettingsMenuItem;
-  private MenuItem mManageUserMenuItem;
 
   private Query mUserQuery;
   private ValueEventListener mUserValueListener;
@@ -87,7 +87,7 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
 
     // grab control references
     Toolbar toolbar = findViewById(R.id.main_toolbar);
-    mSharingActionButton = findViewById(R.id.main_button_share_location);
+    mSharingButton = findViewById(R.id.main_button_share_location);
     mStatusHeaderTextView = findViewById(R.id.main_text_status_header);
     mStatusTextView = findViewById(R.id.main_text_status);
     mTimeStampHeaderTextView = findViewById(R.id.main_text_timestamp_header);
@@ -108,10 +108,12 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
       @Override
       public void onDataChange(DataSnapshot dataSnapshot) {
 
+        LogUtils.debug(TAG, "++onDataChange()");
         mUser = dataSnapshot.getValue(User.class);
         if (mUser != null) {
           // found user, update our copy
           mUser.UserId = dataSnapshot.getKey();
+          LogUtils.debug(TAG, "Data changed for user: %s", mUser.UserId);
         } else {
           // user not found, create a new one in the database
           mUser = new User();
@@ -120,7 +122,27 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
           mUserQuery.getRef().setValue(mUser);
         }
 
-        updateUser();
+        // make sure this user object has the preferences
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        if (sharedPreferences.contains(UserPreferencesFragment.KEY_GET_HISTORY_SETTING)) {
+          mUser.History = Integer.parseInt(sharedPreferences.getString(UserPreferencesFragment.KEY_GET_HISTORY_SETTING, "-1"));
+        } else {
+          sharedPreferences.edit().putString(UserPreferencesFragment.KEY_GET_HISTORY_SETTING, String.valueOf(mUser.History)).apply();
+        }
+
+        if (sharedPreferences.contains(UserPreferencesFragment.KEY_GET_FREQUENCY_SETTING)) {
+          mUser.Frequency = Integer.parseInt(sharedPreferences.getString(UserPreferencesFragment.KEY_GET_FREQUENCY_SETTING, "-1"));
+        } else {
+          sharedPreferences.edit().putString(UserPreferencesFragment.KEY_GET_FREQUENCY_SETTING, String.valueOf(mUser.Frequency)).apply();
+        }
+
+        if (sharedPreferences.contains(UserPreferencesFragment.KEY_GET_SHARING_SETTING)) {
+          mUser.IsSharing = sharedPreferences.getBoolean(UserPreferencesFragment.KEY_GET_SHARING_SETTING, false);
+        } else {
+          sharedPreferences.edit().putBoolean(UserPreferencesFragment.KEY_GET_SHARING_SETTING, mUser.IsSharing).apply();
+        }
+
+        updateUI();
       }
 
       @Override
@@ -132,32 +154,22 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
     };
     mUserQuery.addValueEventListener(mUserValueListener);
 
-    mSharingActionButton.setOnClickListener(view -> {
+    mSharingButton.setOnClickListener(view -> {
 
       if (mUser != null) {
-        if (mUser.IsSharing) {
-          // turn off location sharing
-          mUser.IsSharing = false;
-          SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
-          sharedPreferences.edit().putBoolean(UserPreferencesFragment.KEY_GET_SHARING_SETTING, mUser.IsSharing).apply();
-          FirebaseDatabase.getInstance().getReference().child(User.USERS_ROOT).child(userId).child("IsSharing").setValue(mUser.IsSharing);
-          if (mTimer != null) {
-            mTimer.cancel();
-            mTimer.purge();
-            mTimer = null;
-          }
-        } else {
-          // turn on location sharing, after checking permissions
-          if (!checkPermissions()) {
-            requestPermissions();
-          } else {
-            mUser.IsSharing = true;
-            SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
-            sharedPreferences.edit().putBoolean(UserPreferencesFragment.KEY_GET_SHARING_SETTING, mUser.IsSharing).apply();
-            FirebaseDatabase.getInstance().getReference().child(User.USERS_ROOT).child(userId).child("IsSharing").setValue(mUser.IsSharing);
+        if (mUser.IsSharing) { // turn off location sharing
+          setIsSharingValue(false);
+          stopTimer();
+        } else { // turn on location sharing, after checking permissions
+          if (isPermissionGranted()) {
+            setIsSharingValue(true);
             startLocationTask();
+          } else {
+            requestPermissions(); // this will call startLocationTask() if successful
           }
         }
+
+        updateUI();
       } else {
         LogUtils.warn(TAG, "User value was null.");
       }
@@ -201,12 +213,7 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
     }
 
     mUser = null;
-    if (mTimer != null) {
-      LogUtils.debug(TAG, "Shutting down location timer.");
-      mTimer.cancel();
-      mTimer.purge();
-      mTimer = null;
-    }
+    stopTimer();
   }
 
   @Override
@@ -238,9 +245,9 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
         }
 
         mActionBar.setSubtitle("");
-        toggleUI(View.VISIBLE);
+        toggleStatusUI(View.VISIBLE);
         if (mUser.IsSharing) {
-          initializeTimerTask();
+          startLocationTask();
         }
         return true;
       case R.id.menu_item_manage:
@@ -249,11 +256,15 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
           mActionBar.setSubtitle("Manage");
         }
 
+        if (mSettingsMenuItem != null) {
+          mSettingsMenuItem.setVisible(false);
+        }
+
         if (mManageUserMenuItem != null) {
           mManageUserMenuItem.setVisible(false);
         }
 
-        toggleUI(View.INVISIBLE);
+        toggleStatusUI(View.INVISIBLE);
 
         Fragment manageUserFragment = ManageUserFragment.newInstance(mUser.UserId);
         FragmentTransaction manageUserTransaction = mFragmentManager.beginTransaction();
@@ -269,6 +280,10 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
 
         if (mSettingsMenuItem != null) {
           mSettingsMenuItem.setVisible(false);
+        }
+
+        if (mManageUserMenuItem != null) {
+          mManageUserMenuItem.setVisible(false);
         }
 
         displayPreferences();
@@ -304,6 +319,14 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
   }
 
   @Override
+  public void onPause() {
+    super.onPause();
+
+    LogUtils.debug(TAG, "++onPause()");
+    // TODO: might need to halt location timer during suspension to save battery; need testing
+  }
+
+  @Override
   public void onPopulated(int size) {
 
     LogUtils.debug(TAG, "++onPopulated(%1d)", size);
@@ -318,7 +341,24 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
   public void onPreferenceChanged() {
 
     LogUtils.debug(TAG, "++onPreferenceChanged()");
-    updateUser();
+    if (mUser != null) {
+      SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+      if (sharedPreferences.contains(UserPreferencesFragment.KEY_GET_HISTORY_SETTING)) {
+        mUser.History = Integer.parseInt(sharedPreferences.getString(UserPreferencesFragment.KEY_GET_HISTORY_SETTING, "-1"));
+        FirebaseDatabase.getInstance().getReference().child(User.USERS_ROOT).child(mUser.UserId).child("History").setValue(mUser.History);
+      }
+
+      if (sharedPreferences.contains(UserPreferencesFragment.KEY_GET_FREQUENCY_SETTING)) {
+        mUser.Frequency = Integer.parseInt(sharedPreferences.getString(UserPreferencesFragment.KEY_GET_FREQUENCY_SETTING, "-1"));
+      }
+
+      if (sharedPreferences.contains(UserPreferencesFragment.KEY_GET_SHARING_SETTING)) {
+        mUser.IsSharing = sharedPreferences.getBoolean(UserPreferencesFragment.KEY_GET_SHARING_SETTING, false);
+      }
+
+      setIsSharingValue(mUser.IsSharing);
+      updateUI();
+    }
   }
 
   @Override
@@ -329,11 +369,9 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
       if (grantResults.length <= 0) {
         LogUtils.debug(TAG, "User interaction was cancelled.");
       } else if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-        mUser.IsSharing = true;
-        PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean(UserPreferencesFragment.KEY_GET_SHARING_SETTING, mUser.IsSharing)
-          .apply();
-        FirebaseDatabase.getInstance().getReference().child(User.USERS_ROOT).child(mUser.UserId).child("IsSharing").setValue(mUser.IsSharing);
+        setIsSharingValue(true);
         startLocationTask();
+        updateUI();
       } else {
         Snackbar.make(
           findViewById(R.id.activity_main),
@@ -380,14 +418,14 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
       mManageUserMenuItem.setVisible(false);
     }
 
-    Fragment fragment = MappingFragment.newInstance(mUser.UserId);
+    Fragment fragment = MappingFragment.newInstance(mUser.UserId, friendId);
     FragmentTransaction transaction = mFragmentManager.beginTransaction();
     transaction.replace(R.id.main_fragment_container, fragment, "MAPPING_FRAGMENT");
     transaction.addToBackStack(null);
     transaction.commit();
   }
 
-  private boolean checkPermissions() {
+  private boolean isPermissionGranted() {
 
     LogUtils.debug(TAG, "++checkPermissions()");
     int permissionState = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION);
@@ -397,7 +435,7 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
   private void displayPreferences() {
 
     hideProgressDialog();
-    toggleUI(View.INVISIBLE);
+    toggleStatusUI(View.INVISIBLE);
     Fragment preferenceFragment = new UserPreferencesFragment();
     FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
     transaction.replace(R.id.main_fragment_container, preferenceFragment, "USER_PREFERENCE_FRAGMENT");
@@ -422,9 +460,9 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
           location.Longitude = mLastLocation.getLongitude();
           mUser.LocationList.put(String.valueOf(mLastLocation.getTime()), location);
 
-          String queryPath = User.USERS_ROOT + "/" + mUser.UserId + "/" + UserLocation.ROOT;
+          String queryPath = User.USERS_ROOT + "/" + mUser.UserId + "/" + User.LOCATION_LIST_ROOT;
           LogUtils.debug(TAG, "QueryPath: %s", queryPath);
-          FirebaseDatabase.getInstance().getReference().child(queryPath).child(String.valueOf(mLastLocation.getTime())).setValue(location.toMap());
+          FirebaseDatabase.getInstance().getReference().child(queryPath).child(String.valueOf(location.TimeStamp)).setValue(location.toMap());
         } else {
           LogUtils.warn(TAG, "getLastLocation:exception", task.getException());
         }
@@ -440,7 +478,6 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
       }
     };
   }
-
 
   private void requestPermissions() {
 
@@ -460,6 +497,29 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
     }
   }
 
+  private void setIsSharingValue(boolean isSharing) {
+
+    LogUtils.debug(TAG, "++setIsSharingValue(%s)", isSharing);
+    if (mUser != null) {
+      mUser.IsSharing = isSharing;
+      if (!isSharing) { // turn off location sharing
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        sharedPreferences.edit().putBoolean(UserPreferencesFragment.KEY_GET_SHARING_SETTING, false).apply();
+        FirebaseDatabase.getInstance().getReference().child(User.USERS_ROOT).child(mUser.UserId).child("IsSharing").setValue(false);
+      } else { // turn on location sharing, after checking permissions
+        if (isPermissionGranted()) {
+          SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+          sharedPreferences.edit().putBoolean(UserPreferencesFragment.KEY_GET_SHARING_SETTING, true).apply();
+          FirebaseDatabase.getInstance().getReference().child(User.USERS_ROOT).child(mUser.UserId).child("IsSharing").setValue(true);
+        } else {
+          requestPermissions(); // this will call startLocationTask() if successful
+        }
+      }
+    } else {
+      LogUtils.warn(TAG, "User value was null; sharing cannot happen.");
+    }
+  }
+
   private void startLocationPermissionRequest() {
 
     LogUtils.debug(TAG, "++startLocationPermissionRequest()");
@@ -472,13 +532,7 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
   private void startLocationTask() {
 
     LogUtils.debug(TAG, "++startLocationTask()");
-    if (mTimer != null) {
-      LogUtils.debug(TAG, "Shutting down location timer.");
-      mTimer.cancel();
-      mTimer.purge();
-      mTimer = null;
-    }
-
+    stopTimer();
     mTimer = new Timer();
     initializeTimerTask();
     LogUtils.debug(TAG, "Starting location timer.");
@@ -491,10 +545,25 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
     }
   }
 
-  private void toggleUI(int visibility) {
+  private void stopTimer() {
 
-    LogUtils.debug(TAG, "++toggleUI(%d)", visibility);
-    mSharingActionButton.setVisibility(visibility);
+    LogUtils.debug(TAG, "++stopTimer()");
+    if (mTimerTask != null) {
+      mTimerTask.cancel();
+    }
+
+    if (mTimer != null) {
+      LogUtils.debug(TAG, "Shutting down location timer.");
+      mTimer.cancel();
+      mTimer.purge();
+      mTimer = null;
+    }
+  }
+
+  private void toggleStatusUI(int visibility) {
+
+    LogUtils.debug(TAG, "++toggleStatusUI(int)");
+    mSharingButton.setVisibility(visibility);
     mStatusHeaderTextView.setVisibility(visibility);
     mStatusTextView.setVisibility(visibility);
     mTimeStampHeaderTextView.setVisibility(visibility);
@@ -506,54 +575,27 @@ public class MainActivity extends BaseActivity implements FriendListFragment.OnF
     LogUtils.debug(TAG, "++updateUI()");
     if (mUser != null) {
       if (mUser.IsSharing) {
+        mSharingButton.setImageResource(R.drawable.ic_sharing_on_dark);
         mStatusTextView.setTextColor(Color.GREEN);
         mStatusTextView.setTypeface(null, Typeface.NORMAL);
         mStatusTextView.setText(getString(R.string.status_sharing));
         mTimeStampTextView.setTypeface(null, Typeface.NORMAL);
         mTimeStampTextView.setText(DateUtils.formatDateForDisplay(mUser.get_LatestTimeStamp()));
-        mSharingActionButton.setImageResource(R.drawable.ic_sharing_on_dark);
       } else {
+        mSharingButton.setImageResource(R.drawable.ic_sharing_off_dark);
         mStatusTextView.setTextColor(Color.RED);
         mStatusTextView.setTypeface(null, Typeface.NORMAL);
         mStatusTextView.setText(getString(R.string.status_not_sharing));
         mTimeStampTextView.setTypeface(null, Typeface.NORMAL);
         mTimeStampTextView.setText(DateUtils.formatDateForDisplay(mUser.get_LatestTimeStamp()));
-        mSharingActionButton.setImageResource(R.drawable.ic_sharing_off_dark);
       }
     } else {
+      mSharingButton.setImageResource(R.drawable.ic_sharing_off_dark);
       mStatusTextView.setTextColor(getColor(android.R.color.primary_text_dark));
       mStatusTextView.setTypeface(null, Typeface.ITALIC);
       mStatusTextView.setText(R.string.pending);
       mTimeStampTextView.setTypeface(null, Typeface.ITALIC);
       mTimeStampTextView.setText(R.string.pending);
-      mSharingActionButton.setImageResource(R.drawable.ic_sharing_off_dark);
     }
-  }
-
-  private void updateUser() {
-
-    LogUtils.debug(TAG, "++updateUser()");
-    if (mUser != null) {
-      SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
-      if (sharedPreferences.contains(UserPreferencesFragment.KEY_GET_HISTORY_SETTING)) {
-        mUser.History = Integer.parseInt(sharedPreferences.getString(UserPreferencesFragment.KEY_GET_HISTORY_SETTING, "-1"));
-      }
-
-      if (sharedPreferences.contains(UserPreferencesFragment.KEY_GET_FREQUENCY_SETTING)) {
-        mUser.Frequency = Integer.parseInt(sharedPreferences.getString(UserPreferencesFragment.KEY_GET_FREQUENCY_SETTING, "-1"));
-      }
-
-      // check sharing status last since it depends on frequency value
-      if (sharedPreferences.contains(UserPreferencesFragment.KEY_GET_SHARING_SETTING)) {
-        mUser.IsSharing = sharedPreferences.getBoolean(UserPreferencesFragment.KEY_GET_SHARING_SETTING, false);
-      }
-
-      if (mUser.IsSharing) {
-        FirebaseDatabase.getInstance().getReference().child(User.USERS_ROOT).child(mUser.UserId).child("IsSharing").setValue(mUser.IsSharing);
-        startLocationTask();
-      }
-    }
-
-    updateUI();
   }
 }

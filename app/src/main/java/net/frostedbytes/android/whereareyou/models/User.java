@@ -17,6 +17,9 @@ public class User implements Serializable {
   @Exclude
   public static final String USER_FRIENDS_ROOT = "FriendList";
 
+  @Exclude
+  public static final String LOCATION_LIST_ROOT = "LocationList";
+
   /**
    * Number of minutes between location uploads.
    */
@@ -25,7 +28,7 @@ public class User implements Serializable {
   /**
    * Collection of user objects
    */
-  public Map<String, UserFriend> FriendList;
+  public Map<String, User> FriendList;
 
   /**
    * Display name for friend
