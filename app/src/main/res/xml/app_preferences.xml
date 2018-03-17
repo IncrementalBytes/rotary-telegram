@@ -2,12 +2,6 @@
 <PreferenceScreen
   xmlns:android="http://schemas.android.com/apk/res/android">
 
-  <SwitchPreference
-    android:key="preference_switch_sharing"
-    android:title="Share Location"
-    android:summary="@string/settings_share_location"
-    android:defaultValue="false"/>
-
   <ListPreference
     android:key="preference_list_frequency"
     android:title="Frequency"

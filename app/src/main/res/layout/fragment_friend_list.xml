@@ -9,15 +9,23 @@
   android:paddingEnd="@dimen/activity_horizontal_margin"
   android:paddingTop="@dimen/activity_vertical_margin">
 
-  <android.support.v7.widget.RecyclerView
-    android:id="@+id/friend_list_view"
-    android:layout_width="0dp"
-    android:layout_height="0dp"
-    android:layout_margin="@dimen/default_view_margin"
-    app:layout_constraintBottom_toBottomOf="parent"
-    app:layout_constraintEnd_toEndOf="parent"
-    app:layout_constraintStart_toStartOf="parent"
+  <FrameLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
     app:layout_constraintTop_toTopOf="parent"
-    tools:listitem="@layout/friend_item"/>
+    app:layout_constraintStart_toStartOf="parent"
+    app:layout_constraintEnd_toEndOf="parent"
+    app:layout_constraintBottom_toTopOf="parent">
+    <android.support.v7.widget.RecyclerView
+      android:id="@+id/friend_list_view"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"
+      android:layout_margin="@dimen/default_view_margin"
+      app:layout_constraintBottom_toBottomOf="parent"
+      app:layout_constraintEnd_toEndOf="parent"
+      app:layout_constraintStart_toStartOf="parent"
+      app:layout_constraintTop_toTopOf="parent"
+      tools:listitem="@layout/friend_item"/>
+  </FrameLayout>
 
 </android.support.constraint.ConstraintLayout>

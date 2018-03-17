@@ -8,11 +8,12 @@
   <string name="no_friends">Try adding friends from the Manage action.</string>
   <string name="status_header">Your Status:</string>
   <string name="timestamp_header">Most recent location:</string>
+  <string name="last_active_header">Last active:</string>
   <!-- DESCRIPTION MESSAGES -->
   <string name="desc_locked">App requires authentication before continuing.</string>
-  <string name="permission_rationale">Location permission is needed for core functionality</string>
+  <string name="permission_locale_rationale">Location permission is needed for core functionality.</string>
+  <string name="permission_contacts_rationale">Contacts permission is needed for core functionality.</string>
   <string name="permission_denied_explanation">Permission was denied, but is needed for core functionality.</string>
-  <string name="settings_share_location">Enable to share your location with friends.</string>
   <string name="settings_frequency">Number of minutes between location uploads.</string>
   <string name="settings_history">Number of locations to save.</string>
   <!-- STATUS MESSAGES -->
@@ -22,6 +23,7 @@
   <string name="status_not_sharing">Not Sharing</string>
   <string name="pending">Pending</string>
   <string name="not_available">Not Available</string>
+  <string name="delete_user">Delete</string>
 
   <string-array name="frequency_list_entries">
     <item>Every 1 minute</item>
@@ -49,5 +51,11 @@
     <item>15</item>
     <item>20</item>
   </string-array>
+
+  <string name="navigation_drawer_open">Open navigation drawer</string>
+  <string name="navigation_drawer_close">Close navigation drawer</string>
+
+  <string name="home">Home</string>
+  <string name="user">User</string>
 
 </resources>

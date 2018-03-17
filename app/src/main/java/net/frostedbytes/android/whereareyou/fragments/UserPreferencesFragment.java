@@ -13,7 +13,6 @@ public class UserPreferencesFragment extends PreferenceFragmentCompat implements
 
   public static final String KEY_GET_FREQUENCY_SETTING = "preference_list_frequency";
   public static final String KEY_GET_HISTORY_SETTING = "preference_list_history";
-  public static final String KEY_GET_SHARING_SETTING = "preference_switch_sharing";
 
   public interface OnPreferencesListener {
 
@@ -62,9 +61,7 @@ public class UserPreferencesFragment extends PreferenceFragmentCompat implements
 
     LogUtils.debug(TAG, "++onSharedPreferenceChanged(SharedPreferences, String)");
     getPreferenceScreen().getSharedPreferences().edit().apply();
-    if (keyName.equals(KEY_GET_FREQUENCY_SETTING) ||
-      keyName.equals(KEY_GET_HISTORY_SETTING) ||
-      keyName.equals(KEY_GET_SHARING_SETTING)) {
+    if (keyName.equals(KEY_GET_FREQUENCY_SETTING) || keyName.equals(KEY_GET_HISTORY_SETTING)) {
       mCallback.onPreferenceChanged();
     } else {
       LogUtils.error(TAG, "Unknown key: ", keyName);
