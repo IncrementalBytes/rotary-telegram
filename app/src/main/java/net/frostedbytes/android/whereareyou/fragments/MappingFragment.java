@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Ryan Ward
+ *
+ *    Licensed under the Apache License, Version 2.0 (the "License");
+ *    you may not use this file except in compliance with the License.
+ *    You may obtain a copy of the License at
+ *
+ *        http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *    Unless required by applicable law or agreed to in writing, software
+ *    distributed under the License is distributed on an "AS IS" BASIS,
+ *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *    See the License for the specific language governing permissions and
+ *    limitations under the License.
+ */
+
 package net.frostedbytes.android.whereareyou.fragments;
 
 import android.Manifest;
@@ -5,6 +21,7 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
@@ -19,11 +36,13 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.firebase.database.DataSnapshot;
-import com.google.firebase.database.DatabaseError;
-import com.google.firebase.database.FirebaseDatabase;
-import com.google.firebase.database.Query;
-import com.google.firebase.database.ValueEventListener;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.EventListener;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.FirebaseFirestoreException;
+import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QuerySnapshot;
 import java.util.ArrayList;
 import java.util.List;
 import net.frostedbytes.android.whereareyou.BaseActivity;
@@ -32,6 +51,7 @@ import net.frostedbytes.android.whereareyou.models.User;
 import net.frostedbytes.android.whereareyou.models.UserLocation;
 import net.frostedbytes.android.whereareyou.utils.DateUtils;
 import net.frostedbytes.android.whereareyou.utils.LogUtils;
+import net.frostedbytes.android.whereareyou.utils.PathUtils;
 
 public class MappingFragment extends Fragment implements OnMapReadyCallback {
 
@@ -43,8 +63,8 @@ public class MappingFragment extends Fragment implements OnMapReadyCallback {
   private GoogleMap mGoogleMap;
   private MapView mMapView;
 
-  private Query mFriendLocationQuery;
-  private ValueEventListener mFriendLocationValueListener;
+  private Query mQuery;
+  private ListenerRegistration mListenerRegistration;
 
   public static MappingFragment newInstance(String userId, String friendId) {
 
@@ -68,36 +88,38 @@ public class MappingFragment extends Fragment implements OnMapReadyCallback {
     mMapView.onResume();
     mMapView.getMapAsync(this);
 
-    String queryPath = User.USERS_ROOT + "/" + mUserId + "/" + User.USER_FRIENDS_ROOT + "/" + mFriendId + "/" + User.LOCATION_LIST_ROOT;
-    LogUtils.debug(TAG, "Query: ", queryPath);
-    mFriendLocationQuery = FirebaseDatabase.getInstance().getReference().child(queryPath).orderByChild("TimeStamp");
-    mFriendLocationValueListener = new ValueEventListener() {
+    String queryPath = PathUtils.combine(User.USERS_ROOT, mUserId, User.LOCATION_LIST, mFriendId);
+    mQuery = FirebaseFirestore.getInstance().collection(queryPath);
+    mListenerRegistration = mQuery.addSnapshotListener(new EventListener<QuerySnapshot>() {
 
       @Override
-      public void onDataChange(DataSnapshot dataSnapshot) {
+      public void onEvent(@Nullable QuerySnapshot snapshot, @Nullable FirebaseFirestoreException e) {
 
-        List<UserLocation> locations = new ArrayList<>();
-        for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
-          UserLocation location = snapshot.getValue(UserLocation.class);
-          if (location != null) {
-            location.TimeStamp = Long.parseLong(snapshot.getKey());
-            locations.add(location);
-          } else {
-            LogUtils.warn(TAG, "Skipping data snapshot; could not cast to UserLocation: %s", snapshot.getKey());
-          }
+        if (e != null) {
+          LogUtils.error(TAG, "%s", e.getMessage());
+          return;
         }
 
-        updateMap(locations);
-      }
+        if (snapshot == null) {
+          LogUtils.error(TAG, "LocationList query snapshot was null.");
+          return;
+        }
 
-      @Override
-      public void onCancelled(DatabaseError databaseError) {
+        List<UserLocation> locations = new ArrayList<>();
+        List<DocumentSnapshot> documents= snapshot.getDocuments();
+        if (!documents.isEmpty()) {
+          for (DocumentSnapshot document : documents) {
+            UserLocation location = document.toObject(UserLocation.class);
+            if (location != null) {
+              location.TimeStamp = Long.parseLong(document.getId());
+              locations.add(location);
+            }
+          }
 
-        LogUtils.debug(TAG, "++onCancelled(DatabaseError)");
-        LogUtils.error(TAG, databaseError.getMessage());
+          updateMap(locations);
+        }
       }
-    };
-    mFriendLocationQuery.addValueEventListener(mFriendLocationValueListener);
+    });
 
     return view;
   }
@@ -122,8 +144,9 @@ public class MappingFragment extends Fragment implements OnMapReadyCallback {
     mMapView.onDestroy();
 
     LogUtils.debug(TAG, "++onDestroy()");
-    if (mFriendLocationQuery != null && mFriendLocationValueListener != null) {
-      mFriendLocationQuery.removeEventListener(mFriendLocationValueListener);
+    if (mListenerRegistration != null) {
+      mListenerRegistration.remove();
+      mListenerRegistration = null;
     }
   }
 

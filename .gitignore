@@ -77,3 +77,5 @@ fabric.properties
 ## Google Services (e.g. APIs or Firebase)
 google-services.json
 google_maps_api.xml
+/keystore.properties
+/functions/nbproject/private/

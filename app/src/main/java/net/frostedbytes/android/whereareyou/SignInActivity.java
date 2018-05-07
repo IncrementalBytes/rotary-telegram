@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Ryan Ward
+ *
+ *    Licensed under the Apache License, Version 2.0 (the "License");
+ *    you may not use this file except in compliance with the License.
+ *    You may obtain a copy of the License at
+ *
+ *        http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *    Unless required by applicable law or agreed to in writing, software
+ *    distributed under the License is distributed on an "AS IS" BASIS,
+ *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *    See the License for the specific language governing permissions and
+ *    limitations under the License.
+ */
+
 package net.frostedbytes.android.whereareyou;
 
 import android.content.Intent;
@@ -5,9 +21,6 @@ import android.os.Bundle;
 import android.support.design.widget.Snackbar;
 import android.view.View;
 import android.view.View.OnClickListener;
-import android.widget.Toast;
-import com.crashlytics.android.Crashlytics;
-import com.crashlytics.android.core.CrashlyticsCore;
 import com.google.android.gms.auth.api.Auth;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
@@ -18,7 +31,6 @@ import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
-import io.fabric.sdk.android.Fabric;
 import net.frostedbytes.android.whereareyou.utils.LogUtils;
 
 public class SignInActivity extends BaseActivity implements OnClickListener {
@@ -38,13 +50,6 @@ public class SignInActivity extends BaseActivity implements OnClickListener {
     setContentView(R.layout.activity_sign_in);
 
     SignInButton signInWithGoogleButton = findViewById(R.id.sign_in_button_google);
-
-    // set up crashlytics, disabled for debug builds
-    Crashlytics crashKit = new Crashlytics.Builder().core(new CrashlyticsCore.Builder().disabled(BuildConfig.DEBUG).build()).build();
-
-    // initialize fabric with the debug-disabled crashlytics
-    Fabric.with(this, crashKit);
-
     signInWithGoogleButton.setOnClickListener(this);
 
     mAuth = FirebaseAuth.getInstance();
@@ -56,9 +61,15 @@ public class SignInActivity extends BaseActivity implements OnClickListener {
 
     mGoogleApiClient = new GoogleApiClient.Builder(this)
       .enableAutoManage(this, connectionResult -> {
-        LogUtils.debug(TAG, "++onConnectionFailed(ConnectionResult");
-        LogUtils.debug(TAG, connectionResult.getErrorMessage());
-        Toast.makeText(SignInActivity.this, connectionResult.getErrorMessage(), Toast.LENGTH_SHORT).show();
+        LogUtils.debug(TAG, "++onConnectionFailed(ConnectionResult)");
+        LogUtils.debug(
+          TAG,
+          "%s",
+          connectionResult.getErrorMessage() != null ? connectionResult.getErrorMessage() : "Connection result was null.");
+        Snackbar.make(
+          findViewById(R.id.activity_sign_in),
+          connectionResult.getErrorMessage() != null ? connectionResult.getErrorMessage() : "Connection result was null.",
+          Snackbar.LENGTH_LONG).show();
       })
       .addApi(Auth.GOOGLE_SIGN_IN_API, gso)
       .build();
@@ -69,8 +80,12 @@ public class SignInActivity extends BaseActivity implements OnClickListener {
     super.onStart();
 
     LogUtils.debug(TAG, "++onStart()");
-    if (mAuth.getCurrentUser() != null) {
-      onAuthenticateSuccess(mAuth.getCurrentUser());
+    if (BuildConfig.DEBUG) {
+      LogUtils.debug(TAG, "Skipping auto-authentication.");
+    } else {
+      if (mAuth.getCurrentUser() != null) {
+        onAuthenticateSuccess(mAuth.getCurrentUser());
+      }
     }
   }
 
@@ -100,7 +115,7 @@ public class SignInActivity extends BaseActivity implements OnClickListener {
           AuthCredential credential = GoogleAuthProvider.getCredential(account.getIdToken(), null);
           mAuth.signInWithCredential(credential)
             .addOnCompleteListener(this, task -> {
-              if (task.isSuccessful()) {
+              if (task.isSuccessful() && mAuth.getCurrentUser() != null) {
                 onAuthenticateSuccess(mAuth.getCurrentUser());
               } else {
                 LogUtils.error(
@@ -129,6 +144,8 @@ public class SignInActivity extends BaseActivity implements OnClickListener {
     Intent intent = new Intent(SignInActivity.this, MainActivity.class);
     intent.putExtra(BaseActivity.ARG_USER_NAME, user.getDisplayName());
     intent.putExtra(BaseActivity.ARG_USER_ID, user.getUid());
+    intent.putExtra(BaseActivity.ARG_EMAIL, user.getEmail());
+    intent.putExtra(BaseActivity.ARG_PHOTO_URL, user.getPhotoUrl());
     startActivity(intent);
     finish();
   }

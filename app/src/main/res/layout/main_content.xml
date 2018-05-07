@@ -5,19 +5,20 @@
   xmlns:tools="http://schemas.android.com/tools"
   android:layout_width="match_parent"
   android:layout_height="match_parent"
+  android:background="@color/colorBackground"
   app:layout_behavior="@string/appbar_scrolling_view_behavior"
   tools:context="net.frostedbytes.android.whereareyou.MainActivity"
   tools:showIn="@layout/main_app_bar">
 
-<FrameLayout
+  <FrameLayout
     android:id="@+id/main_frame_layout"
     android:layout_width="0dp"
     android:layout_height="0dp"
-    android:layout_margin="@dimen/default_view_margin"
+    android:background="@android:color/background_dark"
+    app:layout_constraintBottom_toTopOf="@id/main_text_status"
     app:layout_constraintEnd_toEndOf="parent"
     app:layout_constraintStart_toStartOf="parent"
-    app:layout_constraintTop_toTopOf="parent"
-    app:layout_constraintBottom_toTopOf="@id/main_text_status">
+    app:layout_constraintTop_toTopOf="parent">
     <FrameLayout
       android:id="@+id/main_fragment_container"
       android:layout_width="match_parent"
@@ -31,9 +32,10 @@
     android:layout_height="wrap_content"
     android:layout_margin="@dimen/default_view_margin"
     android:text="@string/status_header"
-    app:layout_constraintTop_toBottomOf="@id/main_frame_layout"
     app:layout_constraintEnd_toEndOf="parent"
-    app:layout_constraintStart_toStartOf="parent"/>
+    app:layout_constraintStart_toStartOf="parent"
+    app:layout_constraintTop_toBottomOf="@id/main_frame_layout"
+    app:layout_constraintBottom_toTopOf="@id/main_text_timestamp"/>
   <TextView
     android:id="@+id/main_text_timestamp"
     android:textStyle="bold"
@@ -41,10 +43,10 @@
     android:layout_height="wrap_content"
     android:layout_margin="@dimen/default_view_margin"
     android:text="@string/timestamp_header"
-    app:layout_constraintTop_toBottomOf="@id/main_text_status"
-    app:layout_constraintStart_toStartOf="parent"
+    app:layout_constraintBottom_toBottomOf="parent"
     app:layout_constraintEnd_toEndOf="parent"
-    app:layout_constraintBottom_toBottomOf="parent"/>
+    app:layout_constraintStart_toStartOf="parent"
+    app:layout_constraintTop_toBottomOf="@id/main_text_status"/>
   <android.support.design.widget.FloatingActionButton
     android:id="@+id/main_button_share_location"
     android:layout_width="wrap_content"
@@ -53,7 +55,8 @@
     android:clickable="true"
     android:elevation="5dp"
     android:focusable="true"
-    app:srcCompat="@drawable/ic_sharing_off_dark"
+    app:layout_constraintBottom_toBottomOf="parent"
     app:layout_constraintEnd_toEndOf="parent"
-    app:layout_constraintBottom_toBottomOf="parent"/>
-  </android.support.constraint.ConstraintLayout>
+    app:srcCompat="@drawable/ic_sharing_off_dark"/>
+
+</android.support.constraint.ConstraintLayout>

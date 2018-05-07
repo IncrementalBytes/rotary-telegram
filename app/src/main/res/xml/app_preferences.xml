@@ -5,17 +5,9 @@
   <ListPreference
     android:key="preference_list_frequency"
     android:title="Frequency"
-    android:summary="@string/settings_frequency"
+    android:summary="@string/preferences_frequency"
     android:defaultValue="1"
     android:entries="@array/frequency_list_entries"
     android:entryValues="@array/frequency_list_values"/>
-
-  <ListPreference
-    android:key="preference_list_history"
-    android:title="History"
-    android:summary="@string/settings_history"
-    android:defaultValue="5"
-    android:entries="@array/history_list_entries"
-    android:entryValues="@array/history_list_values"/>
 
 </PreferenceScreen>

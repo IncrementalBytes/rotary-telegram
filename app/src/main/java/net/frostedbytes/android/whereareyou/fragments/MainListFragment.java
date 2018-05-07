@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Ryan Ward
+ *
+ *    Licensed under the Apache License, Version 2.0 (the "License");
+ *    you may not use this file except in compliance with the License.
+ *    You may obtain a copy of the License at
+ *
+ *        http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *    Unless required by applicable law or agreed to in writing, software
+ *    distributed under the License is distributed on an "AS IS" BASIS,
+ *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *    See the License for the specific language governing permissions and
+ *    limitations under the License.
+ */
+
 package net.frostedbytes.android.whereareyou.fragments;
 
 import android.content.Context;
@@ -5,6 +21,7 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
@@ -12,48 +29,51 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
-import com.google.firebase.database.DataSnapshot;
-import com.google.firebase.database.DatabaseError;
-import com.google.firebase.database.FirebaseDatabase;
-import com.google.firebase.database.Query;
-import com.google.firebase.database.ValueEventListener;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.EventListener;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.FirebaseFirestoreException;
+import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QuerySnapshot;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import net.frostedbytes.android.whereareyou.BaseActivity;
 import net.frostedbytes.android.whereareyou.R;
+import net.frostedbytes.android.whereareyou.models.Friend;
 import net.frostedbytes.android.whereareyou.models.User;
 import net.frostedbytes.android.whereareyou.utils.DateUtils;
 import net.frostedbytes.android.whereareyou.utils.LogUtils;
+import net.frostedbytes.android.whereareyou.utils.PathUtils;
+import net.frostedbytes.android.whereareyou.views.TouchableImageView;
 
-public class FriendListFragment extends Fragment {
+public class MainListFragment extends Fragment {
 
-  private static final String TAG = FriendListFragment.class.getSimpleName();
+  private static final String TAG = MainListFragment.class.getSimpleName();
 
-  public interface OnFriendListListener {
+  public interface OnMainListListener {
 
     void onNoFriends();
-
     void onPopulated(int size);
-
     void onSelected(String friendId);
   }
 
-  private OnFriendListListener mCallback;
+  private OnMainListListener mCallback;
 
   private RecyclerView mRecyclerView;
 
-  private List<User> mFriends;
+  private Query mQuery;
+  private ListenerRegistration mListenerRegistration;
+
+  private List<Friend> mFriends;
   private String mUserId;
 
-  private Query mFriendsQuery;
-  private ValueEventListener mFriendsValueListener;
+  public static MainListFragment newInstance(String userId) {
 
-  public static FriendListFragment newInstance(String userId) {
-
-    LogUtils.debug(TAG, "++newInstance(User)");
-    FriendListFragment fragment = new FriendListFragment();
+    LogUtils.debug(TAG, "++newInstance(%s)", userId);
+    MainListFragment fragment = new MainListFragment();
     Bundle args = new Bundle();
     args.putString(BaseActivity.ARG_USER_ID, userId);
     fragment.setArguments(args);
@@ -64,39 +84,46 @@ public class FriendListFragment extends Fragment {
   public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 
     LogUtils.debug(TAG, "++onCreateView(LayoutInflater, ViewGroup, Bundle)");
-    final View view = inflater.inflate(R.layout.fragment_friend_list, container, false);
+    final View view = inflater.inflate(R.layout.fragment_main_list, container, false);
 
-    mRecyclerView = view.findViewById(R.id.friend_list_view);
+    mRecyclerView = view.findViewById(R.id.main_list_view);
 
     mFriends = null;
-    String queryPath = User.USERS_ROOT + "/" + mUserId + "/" + User.USER_FRIENDS_ROOT;
-    LogUtils.debug(TAG, "QueryPath: %s", queryPath);
-    mFriendsQuery = FirebaseDatabase.getInstance().getReference().child(queryPath);
-    mFriendsValueListener = new ValueEventListener() {
+
+    String queryPath = PathUtils.combine(User.USERS_ROOT, mUserId, User.FRIEND_LIST);
+    mQuery = FirebaseFirestore.getInstance().collection(queryPath);
+    mListenerRegistration = mQuery.addSnapshotListener(new EventListener<QuerySnapshot>() {
 
       @Override
-      public void onDataChange(DataSnapshot dataSnapshot) {
+      public void onEvent(@Nullable QuerySnapshot snapshot, @Nullable FirebaseFirestoreException e) {
+
+        if (e != null) {
+          LogUtils.error(TAG, "%s", e.getMessage());
+          return;
+        }
+
+        if (snapshot == null) {
+          LogUtils.error(TAG, "FriendList query snapshot is null: %s", queryPath);
+          return;
+        }
 
         mFriends = new ArrayList<>();
-        for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
-          User friend = snapshot.getValue(User.class);
-          if (friend != null) {
-            friend.UserId = snapshot.getKey();
-            mFriends.add(friend);
+        List<DocumentSnapshot> documents = snapshot.getDocuments();
+        if (!documents.isEmpty()) {
+          for (DocumentSnapshot document : documents) {
+            Friend friend = document.toObject(Friend.class);
+            if (friend != null) {
+              friend.UserId = document.getId();
+              mFriends.add(friend);
+            }
           }
+        } else {
+          LogUtils.debug(TAG, "getDocuments() is empty: %s", queryPath);
         }
 
         updateUI();
       }
-
-      @Override
-      public void onCancelled(DatabaseError databaseError) {
-
-        LogUtils.debug(TAG, "++onCancelled(DatabaseError)");
-        LogUtils.error(TAG, databaseError.getMessage());
-      }
-    };
-    mFriendsQuery.addValueEventListener(mFriendsValueListener);
+    });
 
     updateUI();
 
@@ -109,9 +136,10 @@ public class FriendListFragment extends Fragment {
 
     LogUtils.debug(TAG, "++onAttach(Context)");
     try {
-      mCallback = (OnFriendListListener) context;
+      mCallback = (OnMainListListener) context;
     } catch (ClassCastException e) {
-      throw new ClassCastException(context.toString() + " must implement onNoFriends(), onPopulated(int), and onSelected(String).");
+      throw new ClassCastException(
+        String.format(Locale.ENGLISH, "%s must implement onNoFriends(), onPopulated(int), and onSelected(String).", context.toString()));
     }
 
     Bundle arguments = getArguments();
@@ -127,29 +155,40 @@ public class FriendListFragment extends Fragment {
     super.onDestroy();
 
     LogUtils.debug(TAG, "++onDestroy()");
-    if (mFriendsQuery != null && mFriendsValueListener != null) {
-      mFriendsQuery.removeEventListener(mFriendsValueListener);
+    if (mListenerRegistration != null) {
+      mListenerRegistration.remove();
+      mListenerRegistration = null;
     }
   }
 
   private void updateUI() {
 
     LogUtils.debug(TAG, "++updateUI()");
+    List<Friend> friends = new ArrayList<>();
     if (mFriends != null && !mFriends.isEmpty()) {
-      FriendAdapter friendAdapter = new FriendAdapter(new ArrayList<>(mFriends));
+      // make sure user isn't pending; we only want to show them on the requests page until action is taken
+      for (Friend friend : mFriends) {
+        if (friend.IsAccepted) {
+          friends.add(friend);
+        }
+      }
+    }
+
+    if (!friends.isEmpty()) {
+      FriendAdapter friendAdapter = new FriendAdapter(new ArrayList<>(friends));
       mRecyclerView.setAdapter(friendAdapter);
       mRecyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
       mCallback.onPopulated(friendAdapter.getItemCount()); // signal activity to dismiss progress dialog
-    } else if (mFriends != null && mFriends.isEmpty()) {
+    } else {
       mCallback.onNoFriends();
     }
   }
 
   class FriendAdapter extends RecyclerView.Adapter<FriendHolder> {
 
-    private List<User> mFriends;
+    private List<Friend> mFriends;
 
-    FriendAdapter(List<User> friends) {
+    FriendAdapter(List<Friend> friends) {
 
       mFriends = friends;
     }
@@ -165,7 +204,7 @@ public class FriendListFragment extends Fragment {
     @Override
     public void onBindViewHolder(@NonNull FriendHolder holder, int position) {
 
-      User friend = mFriends.get(position);
+      Friend friend = mFriends.get(position);
       holder.bind(friend);
     }
 
@@ -180,8 +219,9 @@ public class FriendListFragment extends Fragment {
     private final TextView mNameTextView;
     private final TextView mStatusTextView;
     private final TextView mLastKnownDateTextView;
+    private final TouchableImageView mDeleteButton;
 
-    private User mFriend;
+    private Friend mFriend;
 
     FriendHolder(LayoutInflater inflater, ViewGroup parent) {
       super(inflater.inflate(R.layout.friend_item, parent, false));
@@ -190,11 +230,13 @@ public class FriendListFragment extends Fragment {
       mNameTextView = itemView.findViewById(R.id.friend_item_name);
       mStatusTextView = itemView.findViewById(R.id.friend_item_status);
       mLastKnownDateTextView = itemView.findViewById(R.id.friend_item_last_timestamp);
+      mDeleteButton = itemView.findViewById(R.id.friend_item_delete);
     }
 
-    void bind(User friend) {
+    void bind(Friend friend) {
 
       mFriend = friend;
+      mDeleteButton.setVisibility(View.INVISIBLE);
       mNameTextView.setText(friend.FullName);
       if (friend.IsSharing) {
         mStatusTextView.setTextColor(Color.GREEN);
@@ -206,8 +248,7 @@ public class FriendListFragment extends Fragment {
 
       mStatusTextView.setText(friend.IsSharing ? getString(R.string.status_sharing) : getString(R.string.status_not_sharing));
       if (friend.LocationList != null && friend.LocationList.size() > 0) {
-        List<String> locationKeys = new ArrayList<>();
-        locationKeys.addAll(friend.LocationList.keySet());
+        List<String> locationKeys = new ArrayList<>(friend.LocationList.keySet());
         Collections.sort(locationKeys);
         mLastKnownDateTextView.setText(
           String.format(

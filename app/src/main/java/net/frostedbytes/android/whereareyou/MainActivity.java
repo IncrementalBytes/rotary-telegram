@@ -1,19 +1,36 @@
+/*
+ * Copyright 2018 Ryan Ward
+ *
+ *    Licensed under the Apache License, Version 2.0 (the "License");
+ *    you may not use this file except in compliance with the License.
+ *    You may obtain a copy of the License at
+ *
+ *        http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *    Unless required by applicable law or agreed to in writing, software
+ *    distributed under the License is distributed on an "AS IS" BASIS,
+ *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *    See the License for the specific language governing permissions and
+ *    limitations under the License.
+ */
+
 package net.frostedbytes.android.whereareyou;
 
 import android.Manifest;
 import android.Manifest.permission;
+import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.location.Location;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.NavigationView;
 import android.support.design.widget.Snackbar;
@@ -23,11 +40,11 @@ import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentTransaction;
 import android.support.v4.view.GravityCompat;
 import android.support.v4.widget.DrawerLayout;
-import android.support.v7.app.ActionBar;
 import android.support.v7.app.ActionBarDrawerToggle;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.Toolbar;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.TextView;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
@@ -35,28 +52,35 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.database.DataSnapshot;
-import com.google.firebase.database.DatabaseError;
-import com.google.firebase.database.FirebaseDatabase;
-import com.google.firebase.database.Query;
-import com.google.firebase.database.ValueEventListener;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.EventListener;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.FirebaseFirestoreException;
+import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QuerySnapshot;
+import java.util.List;
 import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
-import net.frostedbytes.android.whereareyou.fragments.FriendListFragment;
-import net.frostedbytes.android.whereareyou.fragments.ManageUserFragment;
+import net.frostedbytes.android.whereareyou.fragments.FriendsPageFragment;
+import net.frostedbytes.android.whereareyou.fragments.MainListFragment;
+import net.frostedbytes.android.whereareyou.fragments.ManageUsersFragment;
 import net.frostedbytes.android.whereareyou.fragments.MappingFragment;
+import net.frostedbytes.android.whereareyou.fragments.RequestsPageFragment;
 import net.frostedbytes.android.whereareyou.fragments.UserPreferencesFragment;
 import net.frostedbytes.android.whereareyou.models.User;
 import net.frostedbytes.android.whereareyou.models.UserLocation;
 import net.frostedbytes.android.whereareyou.utils.DateUtils;
 import net.frostedbytes.android.whereareyou.utils.LogUtils;
+import net.frostedbytes.android.whereareyou.utils.PathUtils;
 
 public class MainActivity extends BaseActivity implements
   NavigationView.OnNavigationItemSelectedListener,
-  FriendListFragment.OnFriendListListener,
+  MainListFragment.OnMainListListener,
   UserPreferencesFragment.OnPreferencesListener,
-  ManageUserFragment.OnManageUserListener {
+  FriendsPageFragment.OnFriendListListener,
+  RequestsPageFragment.OnRequestListListener {
 
   private static final String TAG = MainActivity.class.getSimpleName();
 
@@ -64,19 +88,17 @@ public class MainActivity extends BaseActivity implements
   private static final int CONTACTS_PERMISSION_REQUEST_CODE = 35;
 
   private DrawerLayout mDrawerLayout;
-  private ActionBar mActionBar;
-  private FragmentManager mFragmentManager;
+  private NavigationView mNavigationView;
   private FloatingActionButton mSharingButton;
   private TextView mStatusTextView;
   private TextView mTimeStampTextView;
 
-  private Query mUserQuery;
-  private ValueEventListener mUserValueListener;
+  private Query mQuery;
+  private ListenerRegistration mListenerRegistration;
 
   private User mUser;
 
   private FusedLocationProviderClient mFusedLocationClient;
-  private Location mLastLocation;
 
   private final Handler mHandler = new Handler();
   private Timer mTimer;
@@ -99,7 +121,12 @@ public class MainActivity extends BaseActivity implements
 
     // setup tool bar
     setSupportActionBar(toolbar);
-    mActionBar = getSupportActionBar();
+    getSupportFragmentManager().addOnBackStackChangedListener(() -> {
+      Fragment fragment = getSupportFragmentManager().findFragmentById(R.id.main_fragment_container);
+      if (fragment != null) {
+        updateTitleAndDrawer(fragment);
+      }
+    });
 
     ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
       this,
@@ -110,69 +137,71 @@ public class MainActivity extends BaseActivity implements
     mDrawerLayout.addDrawerListener(toggle);
     toggle.syncState();
 
-    NavigationView navigationView = findViewById(R.id.main_navigation_view);
-    navigationView.setNavigationItemSelectedListener(this);
+    mNavigationView = findViewById(R.id.main_navigation_view);
+    mNavigationView.setNavigationItemSelectedListener(this);
 
     // get parameters from previous activity
     String userId = getIntent().getStringExtra(BaseActivity.ARG_USER_ID);
     String userName = getIntent().getStringExtra(BaseActivity.ARG_USER_NAME);
+    String email = getIntent().getStringExtra(BaseActivity.ARG_EMAIL);
+
+    View navigationHeaderView = mNavigationView.inflateHeaderView(R.layout.main_navigation_header);
+    TextView navigationFullName = navigationHeaderView.findViewById(R.id.navigation_text_full_name);
+    navigationFullName.setText(userName);
+    TextView navigationEmail = navigationHeaderView.findViewById(R.id.navigation_text_email);
+    navigationEmail.setText(email);
 
     // look for user in database
-    mUserQuery = FirebaseDatabase.getInstance().getReference().child(User.USERS_ROOT).child(userId);
-    mUserValueListener = new ValueEventListener() {
+    mQuery = FirebaseFirestore.getInstance()
+      .collection(User.USERS_ROOT)
+      .whereEqualTo("UserId", userId);
+    mListenerRegistration = mQuery.addSnapshotListener(new EventListener<QuerySnapshot>() {
 
       @Override
-      public void onDataChange(DataSnapshot dataSnapshot) {
+      public void onEvent(@Nullable QuerySnapshot snapshot, @Nullable FirebaseFirestoreException e) {
 
-        LogUtils.debug(TAG, "++onDataChange()");
-        mUser = dataSnapshot.getValue(User.class);
-        if (mUser != null) {
-          // found user, update our copy
-          mUser.UserId = dataSnapshot.getKey();
-          LogUtils.debug(TAG, "Data changed for user: %s", mUser.UserId);
-        } else {
-          // user not found, create a new one in the database
+        if (e != null) {
+          LogUtils.error(TAG, "%s", e.getMessage());
+          return;
+        }
+
+        if (snapshot == null) {
+          LogUtils.error(TAG, "User query snapshot is null: %s", mQuery);
+          return;
+        }
+
+        List<User> users = snapshot.toObjects(User.class);
+        if (users.isEmpty()) {
+          LogUtils.debug(TAG, "No such user: %s", userId);
           mUser = new User();
           mUser.UserId = userId;
+          mUser.Email = email;
           mUser.FullName = userName;
-          mUserQuery.getRef().setValue(mUser);
-        }
-
-        // make sure this user object has the preferences
-        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
-        if (sharedPreferences.contains(UserPreferencesFragment.KEY_GET_HISTORY_SETTING)) {
-          mUser.History = Integer.parseInt(sharedPreferences.getString(UserPreferencesFragment.KEY_GET_HISTORY_SETTING, "-1"));
+          FirebaseFirestore.getInstance().collection(User.USERS_ROOT).document(userId).set(mUser);
         } else {
-          sharedPreferences.edit().putString(UserPreferencesFragment.KEY_GET_HISTORY_SETTING, String.valueOf(mUser.History)).apply();
-        }
-
-        if (sharedPreferences.contains(UserPreferencesFragment.KEY_GET_FREQUENCY_SETTING)) {
-          mUser.Frequency = Integer.parseInt(sharedPreferences.getString(UserPreferencesFragment.KEY_GET_FREQUENCY_SETTING, "-1"));
-        } else {
-          sharedPreferences.edit().putString(UserPreferencesFragment.KEY_GET_FREQUENCY_SETTING, String.valueOf(mUser.Frequency)).apply();
+          for (DocumentSnapshot document : snapshot.getDocuments()) {
+            mUser = document.toObject(User.class);
+            if (mUser != null) {
+              mUser.UserId = document.getId();
+              break;
+            }
+          }
         }
       }
-
-      @Override
-      public void onCancelled(DatabaseError databaseError) {
-
-        LogUtils.debug(TAG, "++onCancelled(DatabaseError)");
-        LogUtils.error(TAG, databaseError.getMessage());
-      }
-    };
-    mUserQuery.addValueEventListener(mUserValueListener);
+    });
 
     mSharingButton.setOnClickListener(view -> {
 
-      if (mUser != null) {
+      if (mUser != null && !mUser.UserId.equals(BaseActivity.DEFAULT_ID)) {
+        String isSharingPath = PathUtils.combine(User.USERS_ROOT, mUser.UserId);
         if (mUser.IsSharing) { // turn off location sharing
           mUser.IsSharing = false;
-          FirebaseDatabase.getInstance().getReference().child(User.USERS_ROOT).child(mUser.UserId).child("IsSharing").setValue(mUser.IsSharing);
+          FirebaseFirestore.getInstance().document(isSharingPath).update("IsSharing", mUser.IsSharing);
           stopTimer();
         } else { // turn on location sharing, after checking permissions
           if (isPermissionGranted(Manifest.permission.ACCESS_COARSE_LOCATION)) {
             mUser.IsSharing = true;
-            FirebaseDatabase.getInstance().getReference().child(User.USERS_ROOT).child(mUser.UserId).child("IsSharing").setValue(mUser.IsSharing);
+            FirebaseFirestore.getInstance().document(isSharingPath).update("IsSharing", mUser.IsSharing);
             startLocationTask();
           } else {
             requestPermission(getString(R.string.permission_locale_rationale), permission.ACCESS_COARSE_LOCATION, LOCATION_PERMISSION_REQUEST_CODE);
@@ -181,21 +210,27 @@ public class MainActivity extends BaseActivity implements
 
         updateUI();
       } else {
-        LogUtils.warn(TAG, "User value was null.");
+        LogUtils.warn(TAG, "User value was null or unexpected: %s", mUser != null ? mUser.UserId : "");
       }
     });
 
     updateUI();
 
-    mFragmentManager = getSupportFragmentManager();
     mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
 
     // load up the friends fragment
-    Fragment fragment = FriendListFragment.newInstance(userId);
-    FragmentTransaction transaction = mFragmentManager.beginTransaction();
-    transaction.replace(R.id.main_fragment_container, fragment, "FRIEND_LIST_FRAGMENT");
-    transaction.addToBackStack(null);
-    transaction.commit();
+    replaceFragment(MainListFragment.newInstance(userId));
+  }
+
+  @Override
+  public void onAcceptFriend(String userId, String friendId) {
+
+    LogUtils.debug(TAG, "++onAcceptFriend(%s, %s)", userId, friendId);
+    mUser.FriendList.get(friendId).IsAccepted = true;
+    mUser.FriendList.get(friendId).IsDeclined = false;
+    mUser.FriendList.get(friendId).IsPending = false;
+    String queryPath = PathUtils.combine(User.USERS_ROOT, userId, User.FRIEND_LIST);
+    FirebaseFirestore.getInstance().collection(queryPath).document(friendId).set(mUser.FriendList.get(friendId));
   }
 
   @Override
@@ -214,23 +249,39 @@ public class MainActivity extends BaseActivity implements
   }
 
   @Override
+  public void onDeclineFriend(String userId, String friendId) {
+
+    LogUtils.debug(TAG, "++onDeclineFriend(%s, %s)", userId, friendId);
+    onDeleteFriend(userId, friendId);
+  }
+
+  @Override
+  public void onDeleteFriend(String userId, String friendId) {
+
+    LogUtils.debug(TAG, "++onDeleteFriend(%s, %s)", userId, friendId);
+    String queryPath = PathUtils.combine(User.USERS_ROOT, mUser.UserId, User.FRIEND_LIST);
+    FirebaseFirestore.getInstance().collection(queryPath).document(friendId).delete();
+  }
+
+  @Override
+  public void onDeleteRequest(String userId, String friendId) {
+
+    LogUtils.debug(TAG, "++onDeleteRequest(%s, %s)", userId, friendId);
+    onDeleteFriend(userId, friendId);
+  }
+
+  @Override
   public void onDestroy() {
     super.onDestroy();
 
     LogUtils.debug(TAG, "++onDestroy()");
-    if (mUserQuery != null && mUserValueListener != null) {
-      mUserQuery.removeEventListener(mUserValueListener);
+    if (mListenerRegistration != null) {
+      mListenerRegistration.remove();
+      mListenerRegistration = null;
     }
 
     mUser = null;
     stopTimer();
-  }
-
-  @Override
-  public void onDeleteFriend(String friendId) {
-
-    LogUtils.debug(TAG, "++onDeleteFriend(String)");
-    LogUtils.debug(TAG, "Deleting %s from %s friend list.", friendId, mUser.UserId);
   }
 
   @SuppressWarnings("StatementWithEmptyBody")
@@ -240,38 +291,24 @@ public class MainActivity extends BaseActivity implements
     LogUtils.debug(TAG, "++onNavigationItemSelected(%s)", item.getTitle());
     switch (item.getItemId()) {
       case R.id.navigation_menu_home:
-        if (mFragmentManager.getBackStackEntryCount() > 0) {
-          mFragmentManager.popBackStack();
-        }
-
-        if (mActionBar != null) {
-          mActionBar.setSubtitle("");
-        }
+        Fragment homeFragment = MainListFragment.newInstance(mUser.UserId);
+        replaceFragment(homeFragment);
+        updateTitleAndDrawer(homeFragment);
         break;
       case R.id.navigation_menu_manage:
         if (isPermissionGranted(permission.READ_CONTACTS)) {
-          if (mActionBar != null) {
-            mActionBar.setSubtitle("Manage");
-          }
-
-          Fragment manageUserFragment = ManageUserFragment.newInstance(mUser.UserId);
-          FragmentTransaction manageUserTransaction = mFragmentManager.beginTransaction();
-          manageUserTransaction.replace(R.id.main_fragment_container, manageUserFragment, "MANAGE_USER_FRAGMENT");
-          manageUserTransaction.addToBackStack(null);
-          manageUserTransaction.commit();
+          Fragment manageFragment = ManageUsersFragment.newInstance(mUser.UserId);
+          replaceFragment(manageFragment);
+          updateTitleAndDrawer(manageFragment);
         } else {
           requestPermission(getString(R.string.permission_contacts_rationale), permission.READ_CONTACTS, CONTACTS_PERMISSION_REQUEST_CODE);
         }
         break;
-      case R.id.navigation_menu_setting:
-        if (mActionBar != null) {
-          mActionBar.setSubtitle("Settings");
-        }
-
+      case R.id.navigation_menu_preferences:
         displayPreferences();
         break;
       case R.id.navigation_menu_logout:
-        AlertDialog dialog = new AlertDialog.Builder(this)
+        @SuppressLint("RestrictedApi") AlertDialog dialog = new AlertDialog.Builder(this)
           .setMessage(R.string.logout_message)
           .setPositiveButton(android.R.string.yes, (dialog1, which) -> {
 
@@ -330,11 +367,6 @@ public class MainActivity extends BaseActivity implements
     LogUtils.debug(TAG, "++onPreferenceChanged()");
     if (mUser != null) {
       SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
-      if (sharedPreferences.contains(UserPreferencesFragment.KEY_GET_HISTORY_SETTING)) {
-        mUser.History = Integer.parseInt(sharedPreferences.getString(UserPreferencesFragment.KEY_GET_HISTORY_SETTING, "-1"));
-        FirebaseDatabase.getInstance().getReference().child(User.USERS_ROOT).child(mUser.UserId).child("History").setValue(mUser.History);
-      }
-
       if (sharedPreferences.contains(UserPreferencesFragment.KEY_GET_FREQUENCY_SETTING)) {
         mUser.Frequency = Integer.parseInt(sharedPreferences.getString(UserPreferencesFragment.KEY_GET_FREQUENCY_SETTING, "-1"));
       }
@@ -346,30 +378,22 @@ public class MainActivity extends BaseActivity implements
 
     LogUtils.debug(TAG, "++onRequestPermissionResult(int, String[], int[])");
     if (requestCode == LOCATION_PERMISSION_REQUEST_CODE || requestCode == CONTACTS_PERMISSION_REQUEST_CODE) {
-      // TODO: may need to handle multiple grantResults
       if (grantResults.length <= 0) {
         LogUtils.debug(TAG, "User interaction was cancelled.");
       } else if (requestCode == LOCATION_PERMISSION_REQUEST_CODE && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
         mUser.IsSharing = true;
-        FirebaseDatabase.getInstance().getReference().child(User.USERS_ROOT).child(mUser.UserId).child("IsSharing").setValue(mUser.IsSharing);
+        String isSharingPath = PathUtils.combine(User.USERS_ROOT, mUser.UserId);
+        FirebaseFirestore.getInstance().document(isSharingPath).update("IsSharing", mUser.IsSharing);
         startLocationTask();
         updateUI();
       } else if (requestCode == CONTACTS_PERMISSION_REQUEST_CODE && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-        if (mActionBar != null) {
-          mActionBar.setSubtitle("Manage");
-        }
-
-        Fragment manageUserFragment = ManageUserFragment.newInstance(mUser.UserId);
-        FragmentTransaction manageUserTransaction = mFragmentManager.beginTransaction();
-        manageUserTransaction.replace(R.id.main_fragment_container, manageUserFragment, "MANAGE_USER_FRAGMENT");
-        manageUserTransaction.addToBackStack(null);
-        manageUserTransaction.commit();
+        replaceFragment(ManageUsersFragment.newInstance(mUser.UserId));
       } else {
         Snackbar.make(
           findViewById(R.id.main_drawer_layout),
           getString(R.string.permission_denied_explanation),
           Snackbar.LENGTH_INDEFINITE).setAction(
-          getString(R.string.settings),
+          getString(R.string.preferences),
           view -> {
             // build intent that displays the app settings screen.
             Intent intent = new Intent();
@@ -399,51 +423,44 @@ public class MainActivity extends BaseActivity implements
   public void onSelected(String friendId) {
 
     LogUtils.debug(TAG, "++onSelected(%1s)", friendId);
-    if (mActionBar != null) {
-      mActionBar.setSubtitle("");
-    }
-
-    Fragment fragment = MappingFragment.newInstance(mUser.UserId, friendId);
-    FragmentTransaction transaction = mFragmentManager.beginTransaction();
-    transaction.replace(R.id.main_fragment_container, fragment, "MAPPING_FRAGMENT");
-    transaction.addToBackStack(null);
-    transaction.commit();
+    replaceFragment(MappingFragment.newInstance(mUser.UserId, friendId));
   }
 
   private void displayPreferences() {
 
     hideProgressDialog();
-    Fragment preferenceFragment = new UserPreferencesFragment();
-    FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
-    transaction.replace(R.id.main_fragment_container, preferenceFragment, "USER_PREFERENCE_FRAGMENT");
-    transaction.addToBackStack(null);
-    transaction.commit();
+    Fragment preferencesFragment = new UserPreferencesFragment();
+    replaceFragment(preferencesFragment);
+    updateTitleAndDrawer(preferencesFragment);
   }
 
   @SuppressWarnings("MissingPermission")
   private void getLastLocation() {
 
     LogUtils.debug(TAG, "++getLastLocation()");
-    mFusedLocationClient.getLastLocation().addOnCompleteListener(
-      this,
-      task -> {
-        if (task.isSuccessful() && task.getResult() != null) {
-          mLastLocation = task.getResult();
-          mTimeStampTextView.setText(DateUtils.formatDateForDisplay(mLastLocation.getTime()));
+    mFusedLocationClient.getLastLocation().addOnSuccessListener(location -> {
 
-          UserLocation location = new UserLocation();
-          location.TimeStamp = mLastLocation.getTime();
-          location.Latitude = mLastLocation.getLatitude();
-          location.Longitude = mLastLocation.getLongitude();
-          mUser.LocationList.put(String.valueOf(mLastLocation.getTime()), location);
+      if (location != null) { // logic to handle location object
+        mTimeStampTextView.setText(DateUtils.formatDateForDisplay(location.getTime()));
 
-          String queryPath = User.USERS_ROOT + "/" + mUser.UserId + "/" + User.LOCATION_LIST_ROOT;
-          LogUtils.debug(TAG, "QueryPath: %s", queryPath);
-          FirebaseDatabase.getInstance().getReference().child(queryPath).child(String.valueOf(location.TimeStamp)).setValue(location.toMap());
-        } else {
-          LogUtils.warn(TAG, "getLastLocation:exception", task.getException());
-        }
-      });
+        // create new location object
+        UserLocation userLocation = new UserLocation();
+        userLocation.TimeStamp = location.getTime();
+        userLocation.Latitude = location.getLatitude();
+        userLocation.Longitude = location.getLongitude();
+
+        // add location object to users location list (shouldn't this trigger an update?)
+        mUser.LocationList.put(String.valueOf(location.getTime()), userLocation);
+
+        // add location to firestore
+        String queryPath = PathUtils.combine(User.USERS_ROOT, mUser.UserId, User.LOCATION_LIST);
+        LogUtils.debug(TAG, "QueryPath: %s", queryPath);
+        FirebaseFirestore.getInstance().collection(queryPath).document(String.valueOf(userLocation.TimeStamp)).set(userLocation);
+      } else {
+        LogUtils.warn(TAG, "getLastLocation was null.");
+      }
+    })
+    .addOnFailureListener(e -> LogUtils.error(TAG, "getLastLocation failed: %s", e.getMessage()));
   }
 
   private boolean isPermissionGranted(String permission) {
@@ -451,6 +468,15 @@ public class MainActivity extends BaseActivity implements
     LogUtils.debug(TAG, "++isPermissionGranted(%s)", permission);
     int permissionState = ActivityCompat.checkSelfPermission(this, permission);
     return permissionState == PackageManager.PERMISSION_GRANTED;
+  }
+
+  private void replaceFragment(Fragment fragment) {
+
+    LogUtils.debug(TAG, "++replaceFragment(%s)", fragment.getTag());
+    FragmentManager fragmentManager = getSupportFragmentManager();
+    FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
+    fragmentTransaction.replace(R.id.main_fragment_container, fragment);
+    fragmentTransaction.commit();
   }
 
   private void requestPermission(String permission, String rationale, int requestCode) {
@@ -515,6 +541,32 @@ public class MainActivity extends BaseActivity implements
     }
   }
 
+  private void updateTitleAndDrawer(Fragment fragment) {
+
+    String fragmentClassName = fragment.getClass().getName();
+    if (fragmentClassName.equals(ManageUsersFragment.class.getName())) {
+      mNavigationView.getMenu().findItem(R.id.navigation_menu_home).setEnabled(true);
+      mNavigationView.getMenu().findItem(R.id.navigation_menu_manage).setEnabled(false);
+      mNavigationView.getMenu().findItem(R.id.navigation_menu_preferences).setEnabled(true);
+      setTitle("Manage");
+    } else if (fragmentClassName.equals(UserPreferencesFragment.class.getName())) {
+      mNavigationView.getMenu().findItem(R.id.navigation_menu_home).setEnabled(true);
+      mNavigationView.getMenu().findItem(R.id.navigation_menu_manage).setEnabled(true);
+      mNavigationView.getMenu().findItem(R.id.navigation_menu_preferences).setEnabled(false);
+      setTitle("Preferences");
+    } else if (fragmentClassName.equals(MainListFragment.class.getName())) {
+      mNavigationView.getMenu().findItem(R.id.navigation_menu_home).setEnabled(false);
+      mNavigationView.getMenu().findItem(R.id.navigation_menu_manage).setEnabled(true);
+      mNavigationView.getMenu().findItem(R.id.navigation_menu_preferences).setEnabled(true);
+      setTitle(getString(R.string.app_name));
+    } else {
+      mNavigationView.getMenu().findItem(R.id.navigation_menu_home).setEnabled(true);
+      mNavigationView.getMenu().findItem(R.id.navigation_menu_manage).setEnabled(true);
+      mNavigationView.getMenu().findItem(R.id.navigation_menu_preferences).setEnabled(true);
+      setTitle("");
+    }
+  }
+
   private void updateUI() {
 
     LogUtils.debug(TAG, "++updateUI()");
@@ -526,7 +578,7 @@ public class MainActivity extends BaseActivity implements
           Locale.ENGLISH,
           "%s %s",
           getString(R.string.timestamp_header),
-          DateUtils.formatDateForDisplay(mUser.get_LatestTimeStamp())));
+          DateUtils.formatDateForDisplay(mUser.getMostRecentLocationTimeStamp())));
       if (mUser.IsSharing) {
         mSharingButton.setImageResource(R.drawable.ic_sharing_on_dark);
         mStatusTextView.setTextColor(Color.GREEN);

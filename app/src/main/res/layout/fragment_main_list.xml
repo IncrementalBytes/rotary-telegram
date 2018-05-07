@@ -17,7 +17,7 @@
     app:layout_constraintEnd_toEndOf="parent"
     app:layout_constraintBottom_toTopOf="parent">
     <android.support.v7.widget.RecyclerView
-      android:id="@+id/friend_list_view"
+      android:id="@+id/main_list_view"
       android:layout_width="match_parent"
       android:layout_height="match_parent"
       android:layout_margin="@dimen/default_view_margin"
@@ -27,19 +27,5 @@
       app:layout_constraintTop_toTopOf="parent"
       tools:listitem="@layout/friend_item"/>
   </FrameLayout>
-
-  <android.support.design.widget.FloatingActionButton
-    android:id="@+id/friend_button_add"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:layout_marginEnd="8dp"
-    android:layout_marginBottom="24dp"
-    android:clickable="true"
-    android:elevation="5dp"
-    android:focusable="true"
-    app:backgroundTint="@android:color/holo_blue_light"
-    app:layout_constraintBottom_toBottomOf="parent"
-    app:layout_constraintEnd_toEndOf="parent"
-    app:srcCompat="@drawable/ic_add_user_dark"/>
 
 </android.support.constraint.ConstraintLayout>

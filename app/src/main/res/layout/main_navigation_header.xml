@@ -13,6 +13,7 @@
   android:theme="@style/ThemeOverlay.AppCompat.Dark">
 
   <ImageView
+    android:id="@+id/navigation_image_profile"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:paddingTop="@dimen/nav_header_vertical_spacing"
@@ -20,6 +21,7 @@
     android:contentDescription="@string/user"/>
 
   <TextView
+    android:id="@+id/navigation_text_full_name"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:paddingTop="@dimen/nav_header_vertical_spacing"
@@ -27,6 +29,7 @@
     android:textAppearance="@style/TextAppearance.AppCompat.Body1"/>
 
   <TextView
+    android:id="@+id/navigation_text_email"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:text="@string/placeholder"/>
