@@ -17,29 +17,31 @@
 package net.frostedbytes.android.whereareyou.fragments;
 
 import android.content.Context;
+import android.content.DialogInterface;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+import android.support.design.widget.FloatingActionButton;
 import android.support.v4.app.Fragment;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 import android.widget.TextView;
 import com.google.firebase.firestore.DocumentSnapshot;
-import com.google.firebase.firestore.EventListener;
 import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.FirebaseFirestoreException;
 import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.Query;
-import com.google.firebase.firestore.QuerySnapshot;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import net.frostedbytes.android.whereareyou.BaseActivity;
 import net.frostedbytes.android.whereareyou.R;
 import net.frostedbytes.android.whereareyou.models.Friend;
@@ -55,27 +57,33 @@ public class MainListFragment extends Fragment {
 
   public interface OnMainListListener {
 
+    void onAcceptFriend(String friendId);
+    void onDeclineFriend(String friendId);
+    void onDeleteFriend(String friendId);
+    void onDeleteRequest(String friendId);
+    void onFriendListUpdated(Map<String, Friend> friendList);
     void onNoFriends();
     void onPopulated(int size);
     void onSelected(String friendId);
+    void onShowContactList();
   }
 
   private OnMainListListener mCallback;
 
+  private FloatingActionButton mAddFriendButton;
   private RecyclerView mRecyclerView;
 
-  private Query mQuery;
   private ListenerRegistration mListenerRegistration;
 
-  private List<Friend> mFriends;
-  private String mUserId;
+  private Map<String, Friend> mFriendList;
+  private User mUser;
 
-  public static MainListFragment newInstance(String userId) {
+  public static MainListFragment newInstance(User user) {
 
-    LogUtils.debug(TAG, "++newInstance(%s)", userId);
+    LogUtils.debug(TAG, "++newInstance(%s)", user.UserId);
     MainListFragment fragment = new MainListFragment();
     Bundle args = new Bundle();
-    args.putString(BaseActivity.ARG_USER_ID, userId);
+    args.putSerializable(BaseActivity.ARG_USER, user);
     fragment.setArguments(args);
     return fragment;
   }
@@ -87,45 +95,43 @@ public class MainListFragment extends Fragment {
     final View view = inflater.inflate(R.layout.fragment_main_list, container, false);
 
     mRecyclerView = view.findViewById(R.id.main_list_view);
+    mAddFriendButton = view.findViewById(R.id.main_button_add_friend);
 
-    mFriends = null;
+    String queryPath = PathUtils.combine(Friend.FRIENDS_ROOT, mUser.UserId, Friend.FRIEND_LIST);
+    Query query = FirebaseFirestore.getInstance().collection(queryPath);
+    mListenerRegistration = query.addSnapshotListener((snapshot, e) -> {
 
-    String queryPath = PathUtils.combine(User.USERS_ROOT, mUserId, User.FRIEND_LIST);
-    mQuery = FirebaseFirestore.getInstance().collection(queryPath);
-    mListenerRegistration = mQuery.addSnapshotListener(new EventListener<QuerySnapshot>() {
-
-      @Override
-      public void onEvent(@Nullable QuerySnapshot snapshot, @Nullable FirebaseFirestoreException e) {
-
-        if (e != null) {
-          LogUtils.error(TAG, "%s", e.getMessage());
-          return;
-        }
-
-        if (snapshot == null) {
-          LogUtils.error(TAG, "FriendList query snapshot is null: %s", queryPath);
-          return;
-        }
-
-        mFriends = new ArrayList<>();
-        List<DocumentSnapshot> documents = snapshot.getDocuments();
-        if (!documents.isEmpty()) {
-          for (DocumentSnapshot document : documents) {
-            Friend friend = document.toObject(Friend.class);
-            if (friend != null) {
-              friend.UserId = document.getId();
-              mFriends.add(friend);
-            }
-          }
-        } else {
-          LogUtils.debug(TAG, "getDocuments() is empty: %s", queryPath);
-        }
-
-        updateUI();
+      if (e != null) {
+        LogUtils.error(TAG, "%s", e.getMessage());
+        return;
       }
+
+      if (snapshot == null) {
+        LogUtils.error(TAG, "FriendList query snapshot is null: %s", queryPath);
+        return;
+      }
+
+      mFriendList = new HashMap<>();
+      List<DocumentSnapshot> documents = snapshot.getDocuments();
+      if (!documents.isEmpty()) {
+        for (DocumentSnapshot document : documents) {
+          Friend friend = document.toObject(Friend.class);
+          if (friend != null) {
+            friend.UserId = document.getId();
+            mFriendList.put(friend.UserId, friend);
+          }
+        }
+
+        mCallback.onFriendListUpdated(mFriendList);
+      } else {
+        LogUtils.debug(TAG, "getDocuments() is empty: %s", queryPath);
+      }
+
+      updateUI();
     });
 
-    updateUI();
+    mAddFriendButton.setEnabled(false);
+    mAddFriendButton.setOnClickListener(pickView -> mCallback.onShowContactList());
 
     return view;
   }
@@ -138,13 +144,12 @@ public class MainListFragment extends Fragment {
     try {
       mCallback = (OnMainListListener) context;
     } catch (ClassCastException e) {
-      throw new ClassCastException(
-        String.format(Locale.ENGLISH, "%s must implement onNoFriends(), onPopulated(int), and onSelected(String).", context.toString()));
+      throw new ClassCastException("Not all callback methods have been implemented for " + context.toString());
     }
 
     Bundle arguments = getArguments();
     if (arguments != null) {
-      mUserId = arguments.getString(BaseActivity.ARG_USER_ID);
+      mUser = (User)arguments.getSerializable(BaseActivity.ARG_USER);
     } else {
       LogUtils.error(TAG, "Arguments were null.");
     }
@@ -164,20 +169,11 @@ public class MainListFragment extends Fragment {
   private void updateUI() {
 
     LogUtils.debug(TAG, "++updateUI()");
-    List<Friend> friends = new ArrayList<>();
-    if (mFriends != null && !mFriends.isEmpty()) {
-      // make sure user isn't pending; we only want to show them on the requests page until action is taken
-      for (Friend friend : mFriends) {
-        if (friend.IsAccepted) {
-          friends.add(friend);
-        }
-      }
-    }
-
-    if (!friends.isEmpty()) {
-      FriendAdapter friendAdapter = new FriendAdapter(new ArrayList<>(friends));
-      mRecyclerView.setAdapter(friendAdapter);
-      mRecyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
+    mAddFriendButton.setEnabled(true);
+    FriendAdapter friendAdapter = new FriendAdapter(new ArrayList<>(mFriendList.values()));
+    mRecyclerView.setAdapter(friendAdapter);
+    mRecyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
+    if (!mFriendList.isEmpty()) {
       mCallback.onPopulated(friendAdapter.getItemCount()); // signal activity to dismiss progress dialog
     } else {
       mCallback.onNoFriends();
@@ -219,7 +215,9 @@ public class MainListFragment extends Fragment {
     private final TextView mNameTextView;
     private final TextView mStatusTextView;
     private final TextView mLastKnownDateTextView;
-    private final TouchableImageView mDeleteButton;
+    private final TouchableImageView mAcceptImageView;
+    private final TouchableImageView mDeclineImageView;
+    private final TouchableImageView mDeleteImageView;
 
     private Friend mFriend;
 
@@ -230,15 +228,94 @@ public class MainListFragment extends Fragment {
       mNameTextView = itemView.findViewById(R.id.friend_item_name);
       mStatusTextView = itemView.findViewById(R.id.friend_item_status);
       mLastKnownDateTextView = itemView.findViewById(R.id.friend_item_last_timestamp);
-      mDeleteButton = itemView.findViewById(R.id.friend_item_delete);
+      mAcceptImageView = itemView.findViewById(R.id.friend_item_accept);
+      mDeclineImageView = itemView.findViewById(R.id.friend_item_decline);
+      mDeleteImageView = itemView.findViewById(R.id.friend_item_delete);
+
+      mAcceptImageView.setOnTouchListener((view, motionEvent) -> {
+
+        switch (motionEvent.getAction()) {
+          case MotionEvent.ACTION_DOWN:
+            mCallback.onAcceptFriend(mFriend.UserId);
+            break;
+          case MotionEvent.ACTION_UP:
+            view.performClick();
+            return true;
+        }
+
+        return true;
+      });
+
+      mDeclineImageView.setOnTouchListener((view, motionEvent) -> {
+
+        switch (motionEvent.getAction()) {
+          case MotionEvent.ACTION_DOWN:
+            if (getActivity() != null) {
+              AlertDialog dialog = new AlertDialog.Builder(getActivity())
+                .setTitle(String.format(Locale.ENGLISH, "Decline friend request from %s?", mFriend.FullName))
+                .setPositiveButton(android.R.string.ok, (positiveDialog, which) -> mCallback.onDeclineFriend(mFriend.UserId))
+                .setNegativeButton(android.R.string.cancel, (negativeDialog, which) -> {
+                })
+                .create();
+              dialog.show();
+            } else {
+              LogUtils.error(TAG, "Activity is null in view holder.");
+            }
+            break;
+          case MotionEvent.ACTION_UP:
+            view.performClick();
+            return true;
+        }
+
+        return true;
+      });
+
+      mDeleteImageView.setOnTouchListener((View view, MotionEvent motionEvent) -> {
+
+        switch (motionEvent.getAction()) {
+          case MotionEvent.ACTION_DOWN:
+            if (getActivity() != null) {
+              AlertDialog dialog = new AlertDialog.Builder(getActivity())
+                .setTitle(String.format(Locale.ENGLISH, mFriend.IsPending ? "Delete request for %s?" : "Delete sharing with %s?", mFriend.FullName))
+                .setPositiveButton(android.R.string.ok, (DialogInterface positiveDialog, int which) -> {
+                  if (mFriend.IsPending) {
+                    mCallback.onDeleteRequest(mFriend.UserId);
+                  } else {
+                    mCallback.onDeleteFriend(mFriend.UserId);
+                  }
+                })
+                .setNegativeButton(android.R.string.cancel, (negativeDialog, which) -> {
+                })
+                .create();
+              dialog.show();
+            } else {
+              LogUtils.error(TAG, "Activity is null in view holder.");
+            }
+            break;
+          case MotionEvent.ACTION_UP:
+            view.performClick();
+            return true;
+        }
+
+        return true;
+      });
     }
 
     void bind(Friend friend) {
 
       mFriend = friend;
-      mDeleteButton.setVisibility(View.INVISIBLE);
+      if (mFriend.IsPending && !mFriend.IsRequestedBy) {
+        mAcceptImageView.setVisibility(View.INVISIBLE);
+        mDeclineImageView.setVisibility(View.INVISIBLE);
+      } else {
+        mAcceptImageView.setVisibility(View.VISIBLE);
+        mDeclineImageView.setVisibility(View.VISIBLE);
+      }
+
+      mDeleteImageView.setVisibility(View.VISIBLE);
+
       mNameTextView.setText(friend.FullName);
-      if (friend.IsSharing) {
+      if (mFriend.IsSharing) {
         mStatusTextView.setTextColor(Color.GREEN);
         mStatusTextView.setTypeface(null, Typeface.ITALIC);
       } else {
@@ -246,18 +323,27 @@ public class MainListFragment extends Fragment {
         mStatusTextView.setTypeface(null, Typeface.NORMAL);
       }
 
-      mStatusTextView.setText(friend.IsSharing ? getString(R.string.status_sharing) : getString(R.string.status_not_sharing));
-      if (friend.LocationList != null && friend.LocationList.size() > 0) {
-        List<String> locationKeys = new ArrayList<>(friend.LocationList.keySet());
-        Collections.sort(locationKeys);
-        mLastKnownDateTextView.setText(
-          String.format(
-            Locale.ENGLISH,
-            "%s %s",
-            getString(R.string.timestamp_header),
-            DateUtils.formatDateForDisplay(Long.parseLong(locationKeys.remove(locationKeys.size() - 1)))));
+      if (mFriend.IsPending && !mFriend.IsRequestedBy) {
+        mStatusTextView.setText(getString(R.string.request_sent_date_header));
+        mLastKnownDateTextView.setText(DateUtils.formatDateForDisplay(friend.UpdatedDate));
+      } else if (mFriend.IsPending && mFriend.IsRequestedBy) {
+        mStatusTextView.setText(getString(R.string.request_pending_date_header));
+        mLastKnownDateTextView.setText(DateUtils.formatDateForDisplay(friend.UpdatedDate));
       } else {
-        mLastKnownDateTextView.setText(getString(R.string.not_available));
+        mStatusTextView.setText(friend.IsSharing ? getString(R.string.status_sharing) : getString(R.string.status_not_sharing));
+        // TODO: add last known location timestamp to Friend?
+//      if (friend.LocationList != null && friend.LocationList.size() > 0) {
+//        List<String> locationKeys = new ArrayList<>(friend.LocationList.keySet());
+//        Collections.sort(locationKeys);
+//        mLastKnownDateTextView.setText(
+//          String.format(
+//            Locale.ENGLISH,
+//            "%s %s",
+//            getString(R.string.timestamp_header),
+//            DateUtils.formatDateForDisplay(Long.parseLong(locationKeys.remove(locationKeys.size() - 1)))));
+//      } else {
+//        mLastKnownDateTextView.setText(getString(R.string.not_available));
+//      }
       }
     }
 
@@ -265,7 +351,9 @@ public class MainListFragment extends Fragment {
     public void onClick(View view) {
 
       LogUtils.debug(TAG, "%s clicked.", mFriend.FullName);
-      mCallback.onSelected(mFriend.UserId);
+      if (mFriend.IsAccepted) {
+        mCallback.onSelected(mFriend.UserId);
+      }
     }
   }
 }

@@ -1,28 +1,22 @@
 <resources>
   <string name="app_name">Where RU?</string>
   <string name="placeholder">TBD</string>
-  <string name="manage">Manage</string>
   <string name="preferences">Preferences</string>
   <string name="logout">Logout</string>
   <string name="logout_message">Are you sure you want to log out?</string>
-  <string name="no_friends">Try adding friends from the Manage action.</string>
+  <string name="no_friends">No sharing friends found, try adding some contacts.</string>
   <string name="status_header">Your Status:</string>
   <string name="timestamp_header">Most recent location:</string>
-  <string name="last_active_header">Last active:</string>
   <!-- DESCRIPTION MESSAGES -->
   <string name="desc_locked">App requires authentication before continuing.</string>
   <string name="permission_locale_rationale">Location permission is needed for core functionality.</string>
   <string name="permission_contacts_rationale">Contacts permission is needed for core functionality.</string>
   <string name="permission_denied_explanation">Permission was denied, but is needed for core functionality.</string>
   <string name="preferences_frequency">Number of minutes between location uploads.</string>
-  <string name="preferences_history">Number of locations to save.</string>
   <!-- STATUS MESSAGES -->
-  <string name="status_authenticating">Authenticating…</string>
-  <string name="status_initializing">Initializing…</string>
   <string name="status_sharing">Sharing</string>
   <string name="status_not_sharing">Not Sharing</string>
   <string name="pending">Pending</string>
-  <string name="not_available">Not Available</string>
   <string name="delete_user">Delete</string>
 
   <string-array name="frequency_list_entries">
@@ -37,20 +31,6 @@
     <item>5</item>
     <item>10</item>
   </string-array>
-  <string-array name="history_list_entries">
-    <item>Last 1 location</item>
-    <item>Last 5 locations</item>
-    <item>Last 10 locations</item>
-    <item>Last 15 locations</item>
-    <item>Last 20 locations</item>
-  </string-array>
-  <string-array name="history_list_values">
-    <item>1</item>
-    <item>5</item>
-    <item>10</item>
-    <item>15</item>
-    <item>20</item>
-  </string-array>
 
   <string name="navigation_drawer_open">Open navigation drawer</string>
   <string name="navigation_drawer_close">Close navigation drawer</string>
@@ -59,7 +39,13 @@
   <string name="user">User</string>
   <string name="accept_request">Accept</string>
   <string name="decline_request">decline</string>
-  <string name="delete_request">Delete</string>
-  <string name="request_date_header">Request Date:</string>
+  <string name="request_sent_date_header">Sharing Request Sent:</string>
+  <string name="request_pending_date_header">Sharing Request Received:</string>
+
+  <string name="full_name">Name:</string>
+  <string name="email">Email:</string>
+  <string name="pick_contact">Send invite to:</string>
+  <string name="not_installed">Contact needs to install app.</string>
+  <string name="err_query">Query failed; try again later.</string>
 
 </resources>

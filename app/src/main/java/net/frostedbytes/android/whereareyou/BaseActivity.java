@@ -16,50 +16,32 @@
 
 package net.frostedbytes.android.whereareyou;
 
-import android.app.ProgressDialog;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
+import com.crashlytics.android.Crashlytics;
+import io.fabric.sdk.android.Fabric;
 import net.frostedbytes.android.whereareyou.utils.LogUtils;
 
 public class BaseActivity  extends AppCompatActivity {
 
   public static final String ARG_EMAIL = "email";
-  public static final String ARG_FRIEND_ID = "friend_id";
   public static final String ARG_PHOTO_URL = "photo_url";
   public static final String ARG_USER = "user";
   public static final String ARG_USER_ID = "user_id";
   public static final String ARG_USER_NAME = "user_name";
   public static final String DEFAULT_ID = "0000000000000000000000000000";
-  public static final int NUM_USER_PAGES = 2;
 
   private static final String TAG = BaseActivity.class.getSimpleName();
-
-  private ProgressDialog mProgressDialog;
 
   @Override
   public void onCreate(Bundle saved) {
     super.onCreate(saved);
 
     LogUtils.debug(TAG, "++onCreate(Bundle)");
-  }
-
-  void showProgressDialog(String message) {
-
-    LogUtils.debug(TAG, "++showProgressDialog()");
-    if (mProgressDialog == null) {
-      mProgressDialog = new ProgressDialog(this);
-      mProgressDialog.setCancelable(false);
-      mProgressDialog.setMessage(message);
-    }
-
-    mProgressDialog.show();
-  }
-
-  void hideProgressDialog() {
-
-    LogUtils.debug(TAG, "++hideProgressDialog()");
-    if (mProgressDialog != null && mProgressDialog.isShowing()) {
-      mProgressDialog.dismiss();
+    if (!BuildConfig.DEBUG) {
+      Fabric.with(this, new Crashlytics());
+    } else {
+      LogUtils.debug(TAG, "Skipping Crashlytics setup; debug build.");
     }
   }
 }

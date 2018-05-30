@@ -21,6 +21,7 @@ import android.os.Bundle;
 import android.support.design.widget.Snackbar;
 import android.view.View;
 import android.view.View.OnClickListener;
+import android.widget.ProgressBar;
 import com.google.android.gms.auth.api.Auth;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
@@ -42,6 +43,8 @@ public class SignInActivity extends BaseActivity implements OnClickListener {
   private FirebaseAuth mAuth;
   private GoogleApiClient mGoogleApiClient;
 
+  private ProgressBar mProgressBar;
+
   @Override
   public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
@@ -50,6 +53,8 @@ public class SignInActivity extends BaseActivity implements OnClickListener {
     setContentView(R.layout.activity_sign_in);
 
     SignInButton signInWithGoogleButton = findViewById(R.id.sign_in_button_google);
+    mProgressBar = findViewById(R.id.sign_in_progress);
+
     signInWithGoogleButton.setOnClickListener(this);
 
     mAuth = FirebaseAuth.getInstance();
@@ -73,7 +78,7 @@ public class SignInActivity extends BaseActivity implements OnClickListener {
       })
       .addApi(Auth.GOOGLE_SIGN_IN_API, gso)
       .build();
-  }
+    }
 
   @Override
   public void onStart() {
@@ -95,6 +100,7 @@ public class SignInActivity extends BaseActivity implements OnClickListener {
     LogUtils.debug(TAG, "++onClick()");
     switch (view.getId()) {
       case R.id.sign_in_button_google:
+        mProgressBar.setIndeterminate(true);
         Intent signInIntent = Auth.GoogleSignInApi.getSignInIntent(mGoogleApiClient);
         startActivityForResult(signInIntent, RC_SIGN_IN);
         break;
@@ -110,7 +116,6 @@ public class SignInActivity extends BaseActivity implements OnClickListener {
       GoogleSignInResult result = Auth.GoogleSignInApi.getSignInResultFromIntent(data);
       if (result.isSuccess()) {
         GoogleSignInAccount account = result.getSignInAccount();
-        showProgressDialog(getString(R.string.status_authenticating));
         if (account != null) {
           AuthCredential credential = GoogleAuthProvider.getCredential(account.getIdToken(), null);
           mAuth.signInWithCredential(credential)
@@ -125,7 +130,7 @@ public class SignInActivity extends BaseActivity implements OnClickListener {
                 Snackbar.make(findViewById(R.id.activity_sign_in), "Authenticating failed.", Snackbar.LENGTH_SHORT).show();
               }
 
-              hideProgressDialog();
+              mProgressBar.setIndeterminate(false);
             });
         } else {
           LogUtils.error(TAG, "Unable to get sign-in account from authentication result.");

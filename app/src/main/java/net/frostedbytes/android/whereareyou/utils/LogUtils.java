@@ -17,7 +17,7 @@
 package net.frostedbytes.android.whereareyou.utils;
 
 import android.util.Log;
-import com.google.firebase.crash.FirebaseCrash;
+import com.crashlytics.android.Crashlytics;
 import java.util.Locale;
 import net.frostedbytes.android.whereareyou.BuildConfig;
 
@@ -35,7 +35,7 @@ public class LogUtils {
     if (BuildConfig.DEBUG) {
       Log.e(tag, String.format(Locale.ENGLISH, messageFormat, args));
     } else {
-      FirebaseCrash.log(String.format(Locale.ENGLISH, messageFormat, args));
+      Crashlytics.log(String.format(Locale.ENGLISH, messageFormat, args));
     }
   }
 

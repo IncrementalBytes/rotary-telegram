@@ -16,11 +16,19 @@
 
 package net.frostedbytes.android.whereareyou.models;
 
+import com.google.firebase.firestore.Exclude;
 import java.io.Serializable;
-import java.util.HashMap;
+import java.util.Calendar;
+import java.util.Locale;
 import net.frostedbytes.android.whereareyou.BaseActivity;
 
 public class Friend extends User implements Serializable {
+
+  @Exclude
+  public static final String FRIEND_LIST = "FriendList";
+
+  @Exclude
+  public static final String FRIENDS_ROOT = "Friends";
 
   /**
    * Timestamp representing when this friend object was created; in ticks.
@@ -43,21 +51,40 @@ public class Friend extends User implements Serializable {
   public boolean IsPending;
 
   /**
+   * Value indicating whether or not this user made the request.
+   */
+  public boolean IsRequestedBy;
+
+  /**
    * Timestamp of most recent changes to friend object; in ticks.
    */
   public long UpdatedDate;
 
   public Friend() {
 
-    this.CreatedDate = 0;
+    this.CreatedDate = Calendar.getInstance().getTimeInMillis();
     this.Email = "";
     this.FullName = "";
     this.IsAccepted = false;
     this.IsDeclined = false;
     this.IsPending = false;
+    this.IsRequestedBy = false;
     this.IsSharing = false;
-    this.LocationList = new HashMap<>();
-    this.UpdatedDate = 0;
+    this.UpdatedDate = Calendar.getInstance().getTimeInMillis();
     this.UserId = BaseActivity.DEFAULT_ID;
+  }
+
+  public Friend(User user) {
+    this();
+
+    this.Email = user.Email;
+    this.FullName = user.FullName;
+    this.UserId = user.UserId;
+  }
+
+  @Override
+  public String toString() {
+
+    return String.format(Locale.ENGLISH, "%s", this.FullName);
   }
 }

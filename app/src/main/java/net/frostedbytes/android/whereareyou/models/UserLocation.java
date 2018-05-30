@@ -18,8 +18,16 @@ package net.frostedbytes.android.whereareyou.models;
 
 import com.google.firebase.firestore.Exclude;
 import java.io.Serializable;
+import java.util.HashMap;
+import java.util.Map;
 
 public class UserLocation implements Serializable {
+
+  @Exclude
+  public static final String LOCATION_LIST = "LocationList";
+
+  @Exclude
+  public static final String LOCATIONS_ROOT = "Locations";
 
   /**
    * The latitude value for this location.
@@ -42,5 +50,14 @@ public class UserLocation implements Serializable {
     this.Latitude = 0.0;
     this.Longitude = 0.0;
     this.TimeStamp = 0;
+  }
+
+  public Map<String, Object> toMap() {
+
+    HashMap<String, Object> result = new HashMap<>();
+    result.put("Latitude", this.Latitude);
+    result.put("Longitude", this.Longitude);
+    result.put("TimeStamp", this.TimeStamp);
+    return result;
   }
 }

@@ -21,7 +21,6 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
@@ -37,17 +36,13 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.firebase.firestore.DocumentSnapshot;
-import com.google.firebase.firestore.EventListener;
 import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.FirebaseFirestoreException;
 import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.Query;
-import com.google.firebase.firestore.QuerySnapshot;
 import java.util.ArrayList;
 import java.util.List;
 import net.frostedbytes.android.whereareyou.BaseActivity;
 import net.frostedbytes.android.whereareyou.R;
-import net.frostedbytes.android.whereareyou.models.User;
 import net.frostedbytes.android.whereareyou.models.UserLocation;
 import net.frostedbytes.android.whereareyou.utils.DateUtils;
 import net.frostedbytes.android.whereareyou.utils.LogUtils;
@@ -57,21 +52,18 @@ public class MappingFragment extends Fragment implements OnMapReadyCallback {
 
   private static final String TAG = MappingFragment.class.getSimpleName();
 
-  private String mFriendId;
   private String mUserId;
 
   private GoogleMap mGoogleMap;
   private MapView mMapView;
 
-  private Query mQuery;
   private ListenerRegistration mListenerRegistration;
 
-  public static MappingFragment newInstance(String userId, String friendId) {
+  public static MappingFragment newInstance(String userId) {
 
     LogUtils.debug(TAG, "++newInstance(User)");
     MappingFragment fragment = new MappingFragment();
     Bundle args = new Bundle();
-    args.putString(BaseActivity.ARG_FRIEND_ID, friendId);
     args.putString(BaseActivity.ARG_USER_ID, userId);
     fragment.setArguments(args);
     return fragment;
@@ -88,36 +80,32 @@ public class MappingFragment extends Fragment implements OnMapReadyCallback {
     mMapView.onResume();
     mMapView.getMapAsync(this);
 
-    String queryPath = PathUtils.combine(User.USERS_ROOT, mUserId, User.LOCATION_LIST, mFriendId);
-    mQuery = FirebaseFirestore.getInstance().collection(queryPath);
-    mListenerRegistration = mQuery.addSnapshotListener(new EventListener<QuerySnapshot>() {
+    String queryPath = PathUtils.combine(UserLocation.LOCATIONS_ROOT, mUserId, UserLocation.LOCATION_LIST);
+    Query query = FirebaseFirestore.getInstance().collection(queryPath);
+    mListenerRegistration = query.addSnapshotListener((snapshot, e) -> {
 
-      @Override
-      public void onEvent(@Nullable QuerySnapshot snapshot, @Nullable FirebaseFirestoreException e) {
+      if (e != null) {
+        LogUtils.error(TAG, "%s", e.getMessage());
+        return;
+      }
 
-        if (e != null) {
-          LogUtils.error(TAG, "%s", e.getMessage());
-          return;
-        }
+      if (snapshot == null) {
+        LogUtils.error(TAG, "LocationList query snapshot was null.");
+        return;
+      }
 
-        if (snapshot == null) {
-          LogUtils.error(TAG, "LocationList query snapshot was null.");
-          return;
-        }
-
-        List<UserLocation> locations = new ArrayList<>();
-        List<DocumentSnapshot> documents= snapshot.getDocuments();
-        if (!documents.isEmpty()) {
-          for (DocumentSnapshot document : documents) {
-            UserLocation location = document.toObject(UserLocation.class);
-            if (location != null) {
-              location.TimeStamp = Long.parseLong(document.getId());
-              locations.add(location);
-            }
+      List<UserLocation> locations = new ArrayList<>();
+      List<DocumentSnapshot> documents= snapshot.getDocuments();
+      if (!documents.isEmpty()) {
+        for (DocumentSnapshot document : documents) {
+          UserLocation location = document.toObject(UserLocation.class);
+          if (location != null) {
+            location.TimeStamp = Long.parseLong(document.getId());
+            locations.add(location);
           }
-
-          updateMap(locations);
         }
+
+        updateMap(locations);
       }
     });
 
@@ -131,7 +119,6 @@ public class MappingFragment extends Fragment implements OnMapReadyCallback {
     LogUtils.debug(TAG, "++onAttach(Context)");
     Bundle arguments = getArguments();
     if (arguments != null) {
-      mFriendId = arguments.getString(BaseActivity.ARG_FRIEND_ID);
       mUserId = arguments.getString(BaseActivity.ARG_USER_ID);
     } else {
       LogUtils.error(TAG, "Arguments were null.");

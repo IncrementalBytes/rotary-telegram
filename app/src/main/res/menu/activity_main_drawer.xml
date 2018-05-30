@@ -10,10 +10,6 @@
       android:icon="@drawable/ic_home_dark"
       android:title="@string/home"/>
     <item
-      android:id="@+id/navigation_menu_manage"
-      android:icon="@drawable/ic_manage_dark"
-      android:title="@string/manage"/>
-    <item
       android:id="@+id/navigation_menu_preferences"
       android:icon="@drawable/ic_preferences_dark"
       android:title="@string/preferences"/>

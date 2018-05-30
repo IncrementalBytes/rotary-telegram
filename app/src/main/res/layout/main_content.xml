@@ -5,7 +5,6 @@
   xmlns:tools="http://schemas.android.com/tools"
   android:layout_width="match_parent"
   android:layout_height="match_parent"
-  android:background="@color/colorBackground"
   app:layout_behavior="@string/appbar_scrolling_view_behavior"
   tools:context="net.frostedbytes.android.whereareyou.MainActivity"
   tools:showIn="@layout/main_app_bar">
@@ -15,7 +14,7 @@
     android:layout_width="0dp"
     android:layout_height="0dp"
     android:background="@android:color/background_dark"
-    app:layout_constraintBottom_toTopOf="@id/main_text_status"
+    app:layout_constraintBottom_toTopOf="@id/main_progress"
     app:layout_constraintEnd_toEndOf="parent"
     app:layout_constraintStart_toStartOf="parent"
     app:layout_constraintTop_toTopOf="parent">
@@ -25,6 +24,16 @@
       android:layout_height="match_parent"/>
   </FrameLayout>
 
+  <ProgressBar
+    android:id="@+id/main_progress"
+    style="?android:attr/progressBarStyleHorizontal"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/colorBackground"
+    app:layout_constraintTop_toBottomOf="@id/main_frame_layout"
+    app:layout_constraintStart_toStartOf="parent"
+    app:layout_constraintEnd_toEndOf="parent"
+    app:layout_constraintBottom_toTopOf="@id/main_text_status"/>
   <TextView
     android:id="@+id/main_text_status"
     android:textStyle="bold"
@@ -34,7 +43,7 @@
     android:text="@string/status_header"
     app:layout_constraintEnd_toEndOf="parent"
     app:layout_constraintStart_toStartOf="parent"
-    app:layout_constraintTop_toBottomOf="@id/main_frame_layout"
+    app:layout_constraintTop_toBottomOf="@id/main_progress"
     app:layout_constraintBottom_toTopOf="@id/main_text_timestamp"/>
   <TextView
     android:id="@+id/main_text_timestamp"
