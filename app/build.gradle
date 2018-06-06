@@ -11,8 +11,8 @@ android {
         applicationId "net.frostedbytes.android.whereareyou"
         minSdkVersion 24
         targetSdkVersion 27
-        versionCode 3
-        versionName "0.0.003"
+        versionCode 5
+        versionName "0.0.005"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {
@@ -78,6 +78,9 @@ dependencies {
         exclude module: 'runtime'
         exclude module: 'extensions'
     }
+    // Glide (for images)
+    implementation 'com.github.bumptech.glide:glide:4.7.1'
+    annotationProcessor 'com.github.bumptech.glide:compiler:4.7.1'
 }
 
 apply plugin: 'com.google.gms.google-services'

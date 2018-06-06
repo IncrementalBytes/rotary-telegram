@@ -30,11 +30,15 @@ import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.RequestManager;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import net.frostedbytes.android.whereareyou.R;
 import net.frostedbytes.android.whereareyou.models.User;
@@ -95,17 +99,19 @@ public class ContactsFragment extends Fragment {
   private void updateUI() {
 
     LogUtils.debug(TAG, "++updateUI()");
-    ContactAdapter contactAdapter = new ContactAdapter(new ArrayList<>(mContactList.values()));
+    ContactAdapter contactAdapter = new ContactAdapter(Glide.with(this), new ArrayList<>(mContactList.values()));
     mRecyclerView.setAdapter(contactAdapter);
     mRecyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
   }
 
   class ContactAdapter extends RecyclerView.Adapter<ContactHolder> {
 
+    private final RequestManager mGlide;
     private List<User> mContacts;
 
-    ContactAdapter(List<User> contacts) {
+    ContactAdapter(RequestManager glide, List<User> contacts) {
 
+      mGlide = glide;
       mContacts = contacts;
     }
 
@@ -114,7 +120,7 @@ public class ContactsFragment extends Fragment {
     public ContactHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
 
       LayoutInflater layoutInflater = LayoutInflater.from(getActivity());
-      return new ContactHolder(layoutInflater, parent);
+      return new ContactHolder(layoutInflater, parent, mGlide);
     }
 
     @Override
@@ -132,43 +138,47 @@ public class ContactsFragment extends Fragment {
 
   class ContactHolder extends RecyclerView.ViewHolder implements View.OnClickListener {
 
-    private final TextView mNameTextView;
-    private final TextView mEmailTextView;
+    private final RequestManager mGlide;
+    private final TextView mUserTextView;
+    private final ImageView mUserImageView;
 
     private User mContact;
 
-    ContactHolder(LayoutInflater inflater, ViewGroup parent) {
+    ContactHolder(LayoutInflater inflater, ViewGroup parent, RequestManager glide) {
       super(inflater.inflate(R.layout.contacts_item, parent, false));
 
+      mGlide = glide;
       itemView.setOnClickListener(this);
-      mNameTextView = itemView.findViewById(R.id.contacts_text_name_value);
-      mEmailTextView = itemView.findViewById(R.id.contacts_text_email_value);
+
+      mUserTextView = itemView.findViewById(R.id.contacts_text_user_value);
+      mUserImageView = itemView.findViewById(R.id.contacts_image_user);
     }
 
     void bind(User contact) {
 
       mContact = contact;
-      mNameTextView.setText(mContact.FullName);
-      mEmailTextView.setText(mContact.Email);
+      if (contact.PhotoUri == null || contact.PhotoUri.isEmpty()) {
+        mUserImageView.setImageResource(R.drawable.ic_user_default_dark);
+      } else {
+        mGlide.load(contact.PhotoUri).into(mUserImageView);
+      }
+
+      mUserTextView.setText(String.format(Locale.ENGLISH, getString(R.string.contact_format), mContact.FullName, mContact.Email));
     }
 
     @Override
     public void onClick(View view) {
 
-      if (mContact.Emails.size() > 1) { // give user a selection of all emails
-        if (getActivity() != null) {
-          AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
-          final CharSequence[] emails = mContact.Emails.toArray(new CharSequence[mContact.Emails.size()]);
-          builder.setTitle(R.string.pick_contact)
-            .setItems(emails, (dialog, which) -> {
-              LogUtils.debug(TAG, "Selected %s", mContact.Emails.get(which));
-              mCallback.onAddSharingContact(mContact.FullName, mContact.Emails.get(which));
-            }).create();
-        } else {
-          mCallback.onAddSharingContact(mContact.FullName, mContact.Email);
-        }
-      } else {
-        LogUtils.error(TAG, "Could not get activity from ContactsFragment.");
+      if (mContact.Emails.size() > 1 && getActivity() != null) { // give user a selection of all emails
+        AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
+        final CharSequence[] emails = mContact.Emails.toArray(new CharSequence[mContact.Emails.size()]);
+        builder.setTitle(R.string.pick_contact)
+          .setItems(emails, (dialog, which) -> {
+            LogUtils.debug(TAG, "Selected %s", mContact.Emails.get(which));
+            mCallback.onAddSharingContact(mContact.FullName, mContact.Emails.get(which));
+          }).create();
+      } else { // default to first email retrieved by contacts task
+        mCallback.onAddSharingContact(mContact.FullName, mContact.Email);
       }
     }
   }
@@ -199,6 +209,7 @@ public class ContactsFragment extends Fragment {
           User user = new User();
           user.UserId = cursor.getString(cursor.getColumnIndex(ContactsContract.Contacts._ID));
           user.FullName = cursor.getString(cursor.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME));
+          user.PhotoUri = cursor.getString(cursor.getColumnIndex(ContactsContract.Contacts.PHOTO_URI));
 
           // Query and loop for every email of the contact
           Cursor emailCursor = contentResolver.query(
@@ -234,7 +245,7 @@ public class ContactsFragment extends Fragment {
       LogUtils.debug(TAG, "++onPostExecute((Map<String, User>)");
       ContactsFragment fragment = mFragmentWeakReference.get();
       if (fragment == null || fragment.isDetached()) {
-        LogUtils.debug(TAG, "Fragment is null or detached.");
+        LogUtils.error(TAG, "Fragment is null or detached.");
         return;
       }
 

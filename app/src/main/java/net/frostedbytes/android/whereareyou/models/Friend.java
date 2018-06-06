@@ -18,6 +18,7 @@ package net.frostedbytes.android.whereareyou.models;
 
 import com.google.firebase.firestore.Exclude;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Locale;
 import net.frostedbytes.android.whereareyou.BaseActivity;
@@ -29,11 +30,6 @@ public class Friend extends User implements Serializable {
 
   @Exclude
   public static final String FRIENDS_ROOT = "Friends";
-
-  /**
-   * Timestamp representing when this friend object was created; in ticks.
-   */
-  public long CreatedDate;
 
   /**
    * Value indicating whether or not this friend request has been accepted.
@@ -62,14 +58,15 @@ public class Friend extends User implements Serializable {
 
   public Friend() {
 
-    this.CreatedDate = Calendar.getInstance().getTimeInMillis();
     this.Email = "";
+    this.Emails = new ArrayList<>();
     this.FullName = "";
     this.IsAccepted = false;
     this.IsDeclined = false;
     this.IsPending = false;
     this.IsRequestedBy = false;
     this.IsSharing = false;
+    this.PhotoUri = "";
     this.UpdatedDate = Calendar.getInstance().getTimeInMillis();
     this.UserId = BaseActivity.DEFAULT_ID;
   }

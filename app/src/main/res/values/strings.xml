@@ -42,10 +42,9 @@
   <string name="request_sent_date_header">Sharing Request Sent:</string>
   <string name="request_pending_date_header">Sharing Request Received:</string>
 
-  <string name="full_name">Name:</string>
-  <string name="email">Email:</string>
   <string name="pick_contact">Send invite to:</string>
   <string name="not_installed">Contact needs to install app.</string>
   <string name="err_query">Query failed; try again later.</string>
 
+  <string name="contact_format">%s (%s)</string>
 </resources>

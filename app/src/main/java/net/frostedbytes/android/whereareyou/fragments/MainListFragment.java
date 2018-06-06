@@ -30,7 +30,6 @@ import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 import android.widget.TextView;
 import com.google.firebase.firestore.DocumentSnapshot;
@@ -304,10 +303,9 @@ public class MainListFragment extends Fragment {
     void bind(Friend friend) {
 
       mFriend = friend;
+      mAcceptImageView.setVisibility(View.INVISIBLE);
+      mDeclineImageView.setVisibility(View.INVISIBLE);
       if (mFriend.IsPending && !mFriend.IsRequestedBy) {
-        mAcceptImageView.setVisibility(View.INVISIBLE);
-        mDeclineImageView.setVisibility(View.INVISIBLE);
-      } else {
         mAcceptImageView.setVisibility(View.VISIBLE);
         mDeclineImageView.setVisibility(View.VISIBLE);
       }
@@ -323,27 +321,13 @@ public class MainListFragment extends Fragment {
         mStatusTextView.setTypeface(null, Typeface.NORMAL);
       }
 
+      mLastKnownDateTextView.setText(DateUtils.formatDateForDisplay(friend.UpdatedDate));
       if (mFriend.IsPending && !mFriend.IsRequestedBy) {
         mStatusTextView.setText(getString(R.string.request_sent_date_header));
-        mLastKnownDateTextView.setText(DateUtils.formatDateForDisplay(friend.UpdatedDate));
       } else if (mFriend.IsPending && mFriend.IsRequestedBy) {
         mStatusTextView.setText(getString(R.string.request_pending_date_header));
-        mLastKnownDateTextView.setText(DateUtils.formatDateForDisplay(friend.UpdatedDate));
       } else {
         mStatusTextView.setText(friend.IsSharing ? getString(R.string.status_sharing) : getString(R.string.status_not_sharing));
-        // TODO: add last known location timestamp to Friend?
-//      if (friend.LocationList != null && friend.LocationList.size() > 0) {
-//        List<String> locationKeys = new ArrayList<>(friend.LocationList.keySet());
-//        Collections.sort(locationKeys);
-//        mLastKnownDateTextView.setText(
-//          String.format(
-//            Locale.ENGLISH,
-//            "%s %s",
-//            getString(R.string.timestamp_header),
-//            DateUtils.formatDateForDisplay(Long.parseLong(locationKeys.remove(locationKeys.size() - 1)))));
-//      } else {
-//        mLastKnownDateTextView.setText(getString(R.string.not_available));
-//      }
       }
     }
 

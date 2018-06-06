@@ -51,11 +51,14 @@ import com.google.android.gms.auth.api.signin.GoogleSignInClient;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.Query;
-import com.google.firebase.firestore.QueryDocumentSnapshot;
+import com.google.firebase.firestore.Source;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -118,6 +121,7 @@ public class MainActivity extends BaseActivity implements
     // setup tool bar
     setSupportActionBar(toolbar);
     getSupportFragmentManager().addOnBackStackChangedListener(() -> {
+
       Fragment fragment = getSupportFragmentManager().findFragmentById(R.id.main_fragment_container);
       if (fragment != null) {
         updateTitleAndDrawer(fragment);
@@ -165,11 +169,13 @@ public class MainActivity extends BaseActivity implements
           mUser = new User();
           mUser.UserId = userId;
           mUser.Email = email;
+          mUser.Emails.add(email);
           mUser.FullName = userName;
-          FirebaseFirestore.getInstance().collection(User.USERS_ROOT).document(userId).set(mUser);
+          FirebaseFirestore.getInstance().collection(User.USERS_ROOT).document(userId).set(mUser); // TODO: add success/failure event handling
         }
 
         replaceFragment(MainListFragment.newInstance(mUser));
+        updateUI();
       } else {
         LogUtils.error(TAG, "get failed with ", task.getException());
       }
@@ -177,6 +183,7 @@ public class MainActivity extends BaseActivity implements
 
     mSharingButton.setOnClickListener((View view) -> {
 
+      LogUtils.debug(TAG, "++onClickListener()");
       if (mUser != null && !mUser.UserId.equals(BaseActivity.DEFAULT_ID)) {
         String isSharingPath = PathUtils.combine(User.USERS_ROOT, mUser.UserId);
         if (mUser.IsSharing) { // turn off location sharing
@@ -228,45 +235,59 @@ public class MainActivity extends BaseActivity implements
     mFriendList.get(friendId).IsDeclined = false;
     mFriendList.get(friendId).IsPending = false;
     String queryPath = PathUtils.combine(Friend.FRIENDS_ROOT, mUser.UserId, Friend.FRIEND_LIST);
-    FirebaseFirestore.getInstance().collection(queryPath).document(friendId).set(mFriendList.get(friendId));
+    FirebaseFirestore.getInstance().collection(queryPath).document(friendId).set(mFriendList.get(friendId)); // TODO: add success/failure event handling
 
     // update mUser to friendId friend list too
     queryPath = PathUtils.combine(Friend.FRIENDS_ROOT, friendId, Friend.FRIEND_LIST);
     Friend friend = new Friend(mUser);
     friend.IsAccepted = true;
-    FirebaseFirestore.getInstance().collection(queryPath).document(mUser.UserId).set(friend);
+    FirebaseFirestore.getInstance().collection(queryPath).document(mUser.UserId).set(friend); // TODO: add success/failure event handling
   }
 
   @Override
   public void onAddSharingContact(String name, String email) {
 
     LogUtils.debug(TAG, "++onAddSharingContact(String, String)");
-    FirebaseFirestore.getInstance().collection(User.USERS_ROOT).whereEqualTo("Email", email).get().addOnCompleteListener(
-      task -> {
-        if (task.isSuccessful()) {
-          if (task.getResult().isEmpty()) {
-            LogUtils.debug(TAG, "Results were empty.");
-            Snackbar.make(findViewById(R.id.main_drawer_layout), getString(R.string.not_installed), Snackbar.LENGTH_LONG).show();
-          } else {
-            for (QueryDocumentSnapshot snapshot : task.getResult()) {
-              Friend friend = snapshot.toObject(Friend.class);
-              friend.IsPending = true;
-              String queryPath = PathUtils.combine(Friend.FRIENDS_ROOT, mUser.UserId, Friend.FRIEND_LIST);
-              FirebaseFirestore.getInstance().collection(queryPath).document(friend.UserId).set(friend);
+    replaceFragment(MainListFragment.newInstance(mUser));
+    Query userQuery = FirebaseFirestore.getInstance().collection(User.USERS_ROOT).whereEqualTo("Email", email);
+    userQuery.get().addOnCompleteListener(userTask -> {
 
-              Friend userAsFriend = new Friend(mUser);
-              userAsFriend.IsPending = true;
-              userAsFriend.IsRequestedBy = true;
-              queryPath = PathUtils.combine(Friend.FRIENDS_ROOT, friend.UserId, Friend.FRIEND_LIST);
-              FirebaseFirestore.getInstance().collection(queryPath).document(mUser.UserId).set(userAsFriend);
-              replaceFragment(MainListFragment.newInstance(mUser));
+      // query done, did we find a user?
+      if (userTask.isSuccessful() && userTask.getResult().isEmpty()) {
+        LogUtils.debug(TAG, "Results were empty.");
+        Snackbar.make(findViewById(R.id.main_drawer_layout), getString(R.string.not_installed), Snackbar.LENGTH_LONG).show();
+      } else if (userTask.isSuccessful()) { // grab the contacts user object
+        User contact = userTask.getResult().toObjects(User.class).get(0);
+
+        // ensure user and contact aren't already sharing
+        String friendListPath = PathUtils.combine(Friend.FRIENDS_ROOT, mUser.UserId, Friend.FRIEND_LIST, contact.UserId);
+        DocumentReference contactReference = FirebaseFirestore.getInstance().document(friendListPath);
+        contactReference.get(Source.SERVER).addOnCompleteListener(new OnCompleteListener<DocumentSnapshot>() {
+          @Override
+          public void onComplete(@NonNull Task<DocumentSnapshot> contactTask) {
+            if (contactTask.isSuccessful()) {
+              Friend contactFriend = contactTask.getResult().toObject(Friend.class);
+              if (contactFriend == null) { // if the results are empty; good to go
+                Friend friend = new Friend(contact);
+                friend.IsPending = true;
+                String queryPath = PathUtils.combine(Friend.FRIENDS_ROOT, mUser.UserId, Friend.FRIEND_LIST);
+                FirebaseFirestore.getInstance().collection(queryPath).document(friend.UserId).set(friend); // TODO: add success/failure event handling
+
+                Friend userAsFriend = new Friend(mUser);
+                userAsFriend.IsPending = true;
+                userAsFriend.IsRequestedBy = true;
+                queryPath = PathUtils.combine(Friend.FRIENDS_ROOT, friend.UserId, Friend.FRIEND_LIST);
+                FirebaseFirestore.getInstance().collection(queryPath).document(mUser.UserId).set(userAsFriend); // TODO: add success/failure event handling
+              } else if (!contactFriend.IsAccepted) { // if the results have IsAccepted set to false; no-op
+                LogUtils.warn(TAG, "Pending request found; waiting for response.");
+              } else { // if the results have IsAccepted set to true; no go
+                LogUtils.warn(TAG, "User and contact already sharing.");
+              }
             }
           }
-        } else {
-          LogUtils.error(TAG, "User query failed: ", email);
-          Snackbar.make(findViewById(R.id.main_drawer_layout), getString(R.string.err_query), Snackbar.LENGTH_LONG).show();
-        }
-      });
+        });
+      }
+    });
   }
 
   @Override
@@ -276,10 +297,11 @@ public class MainActivity extends BaseActivity implements
     if (mDrawerLayout.isDrawerOpen(GravityCompat.START)) {
       mDrawerLayout.closeDrawer(GravityCompat.START);
     } else {
-      if (getSupportFragmentManager().getBackStackEntryCount() == 1) {
+      Fragment fragment = getSupportFragmentManager().findFragmentById(R.id.main_fragment_container);
+      if (fragment != null && fragment.getClass().getSimpleName().equals(MainListFragment.class.getSimpleName())) {
         finish();
       } else {
-        super.onBackPressed();
+        replaceFragment(MainListFragment.newInstance(mUser));
       }
     }
   }
@@ -498,7 +520,7 @@ public class MainActivity extends BaseActivity implements
 
         // add location to firestore
         LogUtils.debug(TAG, "QueryPath: %s", queryPath);
-        FirebaseFirestore.getInstance().collection(queryPath).document(String.valueOf(userLocation.TimeStamp)).set(userLocation);
+        FirebaseFirestore.getInstance().collection(queryPath).document(String.valueOf(userLocation.TimeStamp)).set(userLocation); // TODO: add success/failure event handling
       } else { // fuse data can be cached, it will return null if the user hasn't moved. check what we might have in the store.
         Query query = FirebaseFirestore.getInstance().collection(queryPath);
         query.addSnapshotListener((snapshot, e) -> {
@@ -527,6 +549,14 @@ public class MainActivity extends BaseActivity implements
 
             mTimeStampTextView.setText(
               String.format(Locale.ENGLISH, "%s %s", getString(R.string.timestamp_header), DateUtils.formatDateForDisplay(latestTimestamp)));
+
+            // update this users entries in friend list
+            for (Friend friend : mFriendList.values()) {
+              if (friend.IsAccepted) {
+                String updatedDate = PathUtils.combine(Friend.FRIENDS_ROOT, friend.UserId, Friend.FRIEND_LIST, mUser.UserId);
+                FirebaseFirestore.getInstance().document(updatedDate).update("UpdatedDate", latestTimestamp);
+              }
+            }
           }
         });
       }

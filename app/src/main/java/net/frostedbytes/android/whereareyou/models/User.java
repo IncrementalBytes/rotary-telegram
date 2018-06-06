@@ -56,6 +56,12 @@ public class User implements Serializable {
   public boolean IsSharing;
 
   /**
+   * User's photo URI path.
+   */
+  @Exclude
+  public String PhotoUri;
+
+  /**
    * Unique identifier for user object.
    */
   public String UserId;
@@ -67,6 +73,7 @@ public class User implements Serializable {
     this.Frequency = 1;
     this.FullName = "";
     this.IsSharing = false;
+    this.PhotoUri = "";
     this.UserId = BaseActivity.DEFAULT_ID;
   }
 
