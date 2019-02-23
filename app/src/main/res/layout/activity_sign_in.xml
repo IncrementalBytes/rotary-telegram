@@ -21,17 +21,6 @@
     app:layout_constraintEnd_toEndOf="parent"
     app:layout_constraintStart_toStartOf="parent"
     app:layout_constraintTop_toTopOf="parent"/>
-  <ImageView
-    android:id="@+id/sign_in_image_logo"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:layout_margin="@dimen/default_view_margin"
-    android:contentDescription="@string/placeholder"
-    android:src="@drawable/ic_sentiment_dissatisfied_white_24dp"
-    app:layout_constraintBottom_toTopOf="@id/sign_in_text_welcome"
-    app:layout_constraintEnd_toEndOf="parent"
-    app:layout_constraintStart_toStartOf="parent"
-    app:layout_constraintTop_toBottomOf="@+id/sign_in_progress"/>
   <TextView
     android:id="@+id/sign_in_text_welcome"
     android:textStyle="bold"
@@ -44,7 +33,7 @@
     android:textSize="24sp"
     app:layout_constraintEnd_toEndOf="parent"
     app:layout_constraintStart_toStartOf="parent"
-    app:layout_constraintTop_toBottomOf="@id/sign_in_image_logo"/>
+    app:layout_constraintTop_toBottomOf="@id/sign_in_progress"/>
   <ImageView
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
@@ -62,5 +51,16 @@
     app:layout_constraintBottom_toBottomOf="parent"
     app:layout_constraintEnd_toEndOf="parent"
     app:layout_constraintStart_toStartOf="parent"/>
+
+  <TextView
+      android:id="@+id/sign_in_text_version"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="8dp"
+      android:layout_marginTop="8dp"
+      android:layout_marginEnd="8dp"
+      app:layout_constraintEnd_toEndOf="parent"
+      app:layout_constraintStart_toStartOf="parent"
+      app:layout_constraintTop_toBottomOf="@+id/sign_in_text_welcome" />
 
 </android.support.constraint.ConstraintLayout>

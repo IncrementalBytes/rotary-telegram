@@ -18,70 +18,93 @@ package net.frostedbytes.android.whereareyou.models;
 
 import com.google.firebase.firestore.Exclude;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Locale;
 import net.frostedbytes.android.whereareyou.BaseActivity;
 
-public class Friend extends User implements Serializable {
+public class Friend implements Serializable {
 
-  @Exclude
-  public static final String FRIEND_LIST = "FriendList";
+    @Exclude
+    public static final String FRIENDS_ROOT = "Friends";
 
-  @Exclude
-  public static final String FRIENDS_ROOT = "Friends";
+    /**
+     * Email of friend.
+     */
+    public String Email;
 
-  /**
-   * Value indicating whether or not this friend request has been accepted.
-   */
-  public boolean IsAccepted;
+    /**
+     * Display name for friend.
+     */
+    public String FullName;
 
-  /**
-   * Value indicating whether or not this friend request has been declined.
-   */
-  public boolean IsDeclined;
+    /**
+     * Unique identifier for user object.
+     */
+    public String Id;
 
-  /**
-   * Value indicating whether or not this friend status is pending.
-   */
-  public boolean IsPending;
+    /**
+     * The latitude value for user location.
+     */
+    public double Latitude;
 
-  /**
-   * Value indicating whether or not this user made the request.
-   */
-  public boolean IsRequestedBy;
+    /**
+     * The longitude value for user location.
+     */
+    public double Longitude;
 
-  /**
-   * Timestamp of most recent changes to friend object; in ticks.
-   */
-  public long UpdatedDate;
+    /**
+     * User's photo URI path.
+     */
+    @Exclude
+    public String PhotoUri;
 
-  public Friend() {
+    /**
+     * The state of the friend. 0 = pending; 1 = waiting; 2 = accepted; 3 = rejected
+     */
+    public int Status;
 
-    this.Email = "";
-    this.Emails = new ArrayList<>();
-    this.FullName = "";
-    this.IsAccepted = false;
-    this.IsDeclined = false;
-    this.IsPending = false;
-    this.IsRequestedBy = false;
-    this.IsSharing = false;
-    this.PhotoUri = "";
-    this.UpdatedDate = Calendar.getInstance().getTimeInMillis();
-    this.UserId = BaseActivity.DEFAULT_ID;
-  }
+    /**
+     * The number of ticks representing when user location was created/updated.
+     */
+    public long TimeStamp;
+
+    /**
+     * Timestamp of most recent changes to friend object; in ticks.
+     */
+    public long UpdatedDate;
+
+    public Friend() {
+
+        this.Email = "";
+        this.FullName = "";
+        this.Id = BaseActivity.DEFAULT_ID;
+        this.Latitude = 0;
+        this.Longitude = 0;
+        this.PhotoUri = "";
+        this.TimeStamp = 0;
+        this.Status = 0;
+        this.UpdatedDate = Calendar.getInstance().getTimeInMillis();
+    }
 
   public Friend(User user) {
     this();
 
     this.Email = user.Email;
     this.FullName = user.FullName;
-    this.UserId = user.UserId;
+    this.Latitude = user.Latitude;
+    this.Longitude = user.Longitude;
+    this.Id = user.Id;
+    this.TimeStamp = user.TimeStamp;
+  }
+
+  public String getEmailAsKey() {
+
+      return this.Email.replace('@', '_').replace('.', '_');
   }
 
   @Override
   public String toString() {
 
-    return String.format(Locale.ENGLISH, "%s", this.FullName);
-  }
+        return String.format(Locale.ENGLISH, "%s", this.FullName);
+    }
 }

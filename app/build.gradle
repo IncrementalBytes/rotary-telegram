@@ -1,5 +1,4 @@
 apply plugin: 'com.android.application'
-apply plugin: 'io.fabric'
 
 def keystorePropertiesFile = rootProject.file("keystore.properties")
 def keystoreProperties = new Properties()
@@ -7,14 +6,36 @@ keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 
 android {
     compileSdkVersion 27
-    defaultConfig {
-        applicationId "net.frostedbytes.android.whereareyou"
-        minSdkVersion 24
-        targetSdkVersion 27
-        versionCode 5
-        versionName "0.0.005"
-        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+
+    def versionPropsFile = rootProject.file('version.properties')
+
+    if (versionPropsFile.canRead()) {
+        Properties versionProps = new Properties()
+        versionProps.load(new FileInputStream(versionPropsFile))
+
+        def majorVersionProperty = versionProps['MAJOR_VERSION'].toInteger()
+        def minorVersionProperty = versionProps['MINOR_VERSION'].toInteger()
+        def versionCodeProperty = versionProps['VERSION_CODE'].toInteger()
+        def updatedBuildVersion = versionProps['BUILD_VERSION'].toInteger() + 1
+
+        versionProps['BUILD_VERSION']=updatedBuildVersion.toString()
+        versionProps.store(versionPropsFile.newWriter(), null)
+
+        def updatedVersionName = majorVersionProperty + "." + minorVersionProperty + "." + versionCodeProperty + "." + updatedBuildVersion
+
+        defaultConfig {
+            applicationId "net.frostedbytes.android.whereareyou"
+            minSdkVersion 24
+            targetSdkVersion 27
+            versionCode versionCodeProperty
+            versionName updatedVersionName
+            testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        }
     }
+    else {
+        throw new GradleException("Could not read version.properties!")
+    }
+
     signingConfigs {
         release {
             keyAlias keystoreProperties['keyAlias']
@@ -33,7 +54,7 @@ android {
         debug {
             // disable fabric build id generation for debug builds
             ext.enableCrashlytics = false
-            minifyEnabled true
+            minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'),
                     'proguard-rules.pro'
         }
@@ -54,25 +75,24 @@ android {
 
 dependencies {
     implementation 'com.android.support:appcompat-v7:27.1.1'
-    implementation 'com.android.support.constraint:constraint-layout:1.1.0'
+    implementation 'com.android.support.constraint:constraint-layout:1.1.3'
     implementation 'com.android.support:design:27.1.1'
     implementation 'com.android.support:recyclerview-v7:27.1.1'
     implementation 'com.android.support:preference-v7:27.1.1'
     // Google
-    implementation 'com.google.android.gms:play-services-auth:15.0.1'
-    implementation 'com.google.android.gms:play-services-base:15.0.1'
-    implementation 'com.google.android.gms:play-services-identity:15.0.1'
-    implementation 'com.google.android.gms:play-services-location:15.0.1'
-    implementation 'com.google.android.gms:play-services-maps:15.0.1'
+    implementation 'com.google.android.gms:play-services-auth:16.0.1'
+    implementation 'com.google.android.gms:play-services-base:16.1.0'
+    implementation 'com.google.android.gms:play-services-identity:16.0.0'
+    implementation 'com.google.android.gms:play-services-location:16.0.0'
+    implementation 'com.google.android.gms:play-services-maps:16.1.0'
     // Firebase
-    implementation 'com.google.firebase:firebase-analytics:16.0.0'
-    implementation 'com.google.firebase:firebase-auth:16.0.1'
-    implementation 'com.google.firebase:firebase-config:16.0.0'
-    implementation 'com.google.firebase:firebase-firestore:17.0.1'
-    implementation 'com.google.firebase:firebase-functions:16.0.1'
-    implementation 'com.crashlytics.sdk.android:crashlytics:2.9.3'
-    implementation 'com.google.firebase:firebase-core:16.0.0'
-    implementation 'com.google.firebase:firebase-database:16.0.1'
+    implementation 'com.google.firebase:firebase-analytics:16.3.0'
+    implementation 'com.google.firebase:firebase-auth:16.1.0'
+    implementation 'com.google.firebase:firebase-config:16.3.0'
+    implementation 'com.google.firebase:firebase-firestore:18.0.1'
+    implementation 'com.google.firebase:firebase-functions:16.1.3'
+    implementation 'com.crashlytics.sdk.android:crashlytics:2.9.9'
+    implementation 'com.google.firebase:firebase-database:16.0.6'
     // Firebase UI
     implementation('com.firebaseui:firebase-ui-database:3.1.0') {
         exclude module: 'runtime'

@@ -25,70 +25,82 @@ import net.frostedbytes.android.whereareyou.BaseActivity;
 
 public class User implements Serializable {
 
-  @Exclude
-  public static final String USERS_ROOT = "Users";
+    @Exclude
+    public static final String USERS_ROOT = "Users";
 
-  /**
-   * Email associated with this user object.
-   */
-  public String Email;
+    /**
+     * Email associated with this user object.
+     */
+    public String Email;
 
-  /**
-   * List of emails associated with this user.
-   */
-  @Exclude
-  public List<String> Emails;
+    /**
+     * Number of minutes between location uploads.
+     */
+    @Exclude
+    public int Frequency;
 
-  /**
-   * Number of minutes between location uploads.
-   */
-  @Exclude
-  public int Frequency;
+    /**
+     * List of friends.
+     */
+    public List<Friend> Friends;
 
-  /**
-   * Display name for friend.
-   */
-  public String FullName;
+    /**
+     * Display name for friend.
+     */
+    public String FullName;
 
-  /**
-   * Current status; e.g. Sharing, Not Sharing.
-   */
-  public boolean IsSharing;
+    /**
+     * Unique identifier for user object.
+     */
+    public String Id;
 
-  /**
-   * User's photo URI path.
-   */
-  @Exclude
-  public String PhotoUri;
+    /**
+     * The latitude value for user location.
+     */
+    public double Latitude;
 
-  /**
-   * Unique identifier for user object.
-   */
-  public String UserId;
+    /**
+     * The longitude value for user location.
+     */
+    public double Longitude;
 
-  public User() {
+    /**
+     * User's photo URI path.
+     */
+    @Exclude
+    public String PhotoUri;
 
-    this.Email = "";
-    this.Emails = new ArrayList<>();
-    this.Frequency = 1;
-    this.FullName = "";
-    this.IsSharing = false;
-    this.PhotoUri = "";
-    this.UserId = BaseActivity.DEFAULT_ID;
-  }
+    /**
+     * The number of ticks representing when user location was created/updated.
+     */
+    public long TimeStamp;
 
-  @Override
-  public String toString() {
+    public User() {
 
-    return String.format(Locale.ENGLISH, "%s (%s)", this.FullName, this.Email);
-  }
+        this.Email = "";
+        this.Frequency = 1;
+        this.Friends = new ArrayList<>();
+        this.FullName = "";
+        this.Id = BaseActivity.DEFAULT_ID;
+        this.PhotoUri = "";
+        this.Latitude = 0;
+        this.Longitude = 0;
+        this.TimeStamp = 0;
+    }
 
-  /**
-   * Replaces illegal characters in the email address with '_' so it can be used as a key.
-   * @return The email address where illegal characters have been replaced with '_'
-   */
-  public String getEmailAsKey() {
+    @Override
+    public String toString() {
 
-    return this.Email.replace('@', '_').replace('.', '_');
-  }
+        return String.format(Locale.ENGLISH, "%s (%s)", this.FullName, this.Email);
+    }
+
+    /**
+     * Replaces illegal characters in the email address with '_' so it can be used as a key.
+     *
+     * @return The email address where illegal characters have been replaced with '_'
+     */
+    public String getEmailAsKey() {
+
+        return this.Email.replace('@', '_').replace('.', '_');
+    }
 }

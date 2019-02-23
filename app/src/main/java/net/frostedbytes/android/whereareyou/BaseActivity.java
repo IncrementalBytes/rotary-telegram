@@ -31,7 +31,8 @@ public class BaseActivity  extends AppCompatActivity {
   public static final String ARG_USER_NAME = "user_name";
   public static final String DEFAULT_ID = "0000000000000000000000000000";
 
-  private static final String TAG = BaseActivity.class.getSimpleName();
+  public static final String BASE_TAG = "WhereAreYou::";
+  private static final String TAG = BASE_TAG + BaseActivity.class.getSimpleName();
 
   @Override
   public void onCreate(Bundle saved) {

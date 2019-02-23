@@ -10,6 +10,10 @@
       android:icon="@drawable/ic_home_dark"
       android:title="@string/home"/>
     <item
+        android:id="@+id/navigation_menu_friends"
+        android:icon="@drawable/ic_friends_dark"
+        android:title="@string/friends"/>
+    <item
       android:id="@+id/navigation_menu_preferences"
       android:icon="@drawable/ic_preferences_dark"
       android:title="@string/preferences"/>
