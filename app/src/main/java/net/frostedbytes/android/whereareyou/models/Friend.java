@@ -86,24 +86,25 @@ public class Friend implements Serializable {
         this.UpdatedDate = Calendar.getInstance().getTimeInMillis();
     }
 
-  public Friend(User user) {
-    this();
+    public Friend(User user) {
+        this();
 
-    this.Email = user.Email;
-    this.FullName = user.FullName;
-    this.Latitude = user.Latitude;
-    this.Longitude = user.Longitude;
-    this.Id = user.Id;
-    this.TimeStamp = user.TimeStamp;
-  }
+        this.Email = user.Email;
+        this.FullName = user.FullName;
+        this.Latitude = user.Latitude;
+        this.Longitude = user.Longitude;
+        this.Id = user.Id;
+        this.TimeStamp = user.TimeStamp;
+    }
 
-  public String getEmailAsKey() {
+    @Exclude
+    public String getEmailAsKey() {
 
-      return this.Email.replace('@', '_').replace('.', '_');
-  }
+        return this.Email.replace('@', '_').replace('.', '_');
+    }
 
-  @Override
-  public String toString() {
+    @Override
+    public String toString() {
 
         return String.format(Locale.ENGLISH, "%s", this.FullName);
     }

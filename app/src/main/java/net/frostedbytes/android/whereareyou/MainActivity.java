@@ -40,6 +40,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
@@ -124,7 +125,6 @@ public class MainActivity extends BaseActivity implements
         navigationFullName.setText(mUser.FullName);
         TextView navigationEmail = navigationHeaderView.findViewById(R.id.navigation_text_email);
         navigationEmail.setText(mUser.Email);
-        // TODO: add PhotoURL to navigation header
 
         // check permission
         checkPermission(Manifest.permission.ACCESS_FINE_LOCATION, LOCATION_PERMISSION_REQUEST_CODE);
@@ -204,7 +204,7 @@ public class MainActivity extends BaseActivity implements
                     LogUtils.debug(TAG, "ACCESS_FINE_LOCATION permission granted.");
                     replaceFragment(MappingFragment.newInstance(mUser));
                 } else {
-                    LogUtils.debug(TAG, "ACCESS_FINE_LOCATION permission denied; halting location task.");
+                    LogUtils.debug(TAG, "ACCESS_FINE_LOCATION permission denied.");
                 }
 
                 break;
@@ -213,7 +213,7 @@ public class MainActivity extends BaseActivity implements
                     LogUtils.debug(TAG, "READ_CONTACTS permission granted.");
                     replaceFragment(ContactsFragment.newInstance());
                 } else {
-                    LogUtils.debug(TAG, "READ_CONTACTS permission denied; TBD");
+                    LogUtils.debug(TAG, "READ_CONTACTS permission denied.");
                 }
 
                 break;

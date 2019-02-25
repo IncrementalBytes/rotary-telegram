@@ -162,7 +162,6 @@ public class SignInActivity extends BaseActivity implements OnClickListener {
         intent.putExtra(BaseActivity.ARG_USER_NAME, user.getDisplayName());
         intent.putExtra(BaseActivity.ARG_USER_ID, user.getUid());
         intent.putExtra(BaseActivity.ARG_EMAIL, user.getEmail());
-        intent.putExtra(BaseActivity.ARG_PHOTO_URL, user.getPhotoUrl());
         startActivity(intent);
         finish();
     }

@@ -99,6 +99,7 @@ public class User implements Serializable {
      *
      * @return The email address where illegal characters have been replaced with '_'
      */
+    @Exclude
     public String getEmailAsKey() {
 
         return this.Email.replace('@', '_').replace('.', '_');
