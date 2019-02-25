@@ -31,10 +31,15 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Switch;
 import android.widget.TextView;
+
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -65,11 +70,9 @@ public class FriendListFragment extends Fragment {
 
         void onDeleteRequest(Friend friend);
 
-        void onFriendListUpdated(Map<String, Friend> friendList);
+        void onFriendListQueryComplete();
 
-        void onNoFriends();
-
-        void onPopulated(int size);
+        void onListQueryFailed();
 
         void onSelected(String friendId);
 
@@ -84,14 +87,14 @@ public class FriendListFragment extends Fragment {
     private ListenerRegistration mListenerRegistration;
 
     private Map<String, Friend> mFriendList;
-    private String mUserId;
+    private User mUser;
 
-    public static FriendListFragment newInstance(String userId) {
+    public static FriendListFragment newInstance(User user) {
 
-        LogUtils.debug(TAG, "++newInstance(String)");
+        LogUtils.debug(TAG, "++newInstance(User)");
         FriendListFragment fragment = new FriendListFragment();
         Bundle args = new Bundle();
-        args.putString(BaseActivity.ARG_USER_ID, userId);
+        args.putSerializable(BaseActivity.ARG_USER, user);
         fragment.setArguments(args);
         return fragment;
     }
@@ -109,7 +112,7 @@ public class FriendListFragment extends Fragment {
 
         Bundle arguments = getArguments();
         if (arguments != null) {
-            mUserId = arguments.getString(BaseActivity.ARG_USER_ID);
+            mUser = (User)arguments.getSerializable(BaseActivity.ARG_USER);
         } else {
             LogUtils.error(TAG, "Arguments were null.");
         }
@@ -124,17 +127,20 @@ public class FriendListFragment extends Fragment {
         mRecyclerView = view.findViewById(R.id.main_list_view);
         mAddFriendButton = view.findViewById(R.id.main_button_add_friend);
 
-        String queryPath = PathUtils.combine(User.USERS_ROOT, mUserId, Friend.FRIENDS_ROOT);
+        // get list of friends for display
+        String queryPath = PathUtils.combine(User.USERS_ROOT, mUser.Id, Friend.FRIENDS_ROOT);
         Query query = FirebaseFirestore.getInstance().collection(queryPath);
         mListenerRegistration = query.addSnapshotListener((snapshot, e) -> {
 
             if (e != null) {
                 LogUtils.error(TAG, "%s", e.getMessage());
+                mCallback.onListQueryFailed();
                 return;
             }
 
             if (snapshot == null) {
                 LogUtils.error(TAG, "FriendList query snapshot is null: %s", queryPath);
+                mCallback.onListQueryFailed();
                 return;
             }
 
@@ -148,13 +154,37 @@ public class FriendListFragment extends Fragment {
                         mFriendList.put(friend.Id, friend);
                     }
                 }
-
-                mCallback.onFriendListUpdated(mFriendList);
             } else {
                 LogUtils.debug(TAG, "getDocuments() is empty: %s", queryPath);
             }
 
             updateUI();
+        });
+
+        // look for any temporary friend requests based on email as key
+        List<User> users = new ArrayList<>();
+        FirebaseFirestore.getInstance().collection(User.USERS_ROOT).get().addOnCompleteListener(task -> {
+
+            if (task.isSuccessful()) {
+                if (task.getResult() != null) {
+
+                    // look through all users of the system; ignoring the record for the current user
+                    for (QueryDocumentSnapshot snapshot : task.getResult()) {
+                        if (snapshot.getId().equals(mUser.Id)) {
+                            continue;
+                        }
+
+                        users.add(snapshot.toObject(User.class));
+                    }
+                } else {
+                    LogUtils.debug(TAG, "Task result is null.");
+                }
+            } else {
+                LogUtils.debug(TAG, "Task was unsuccessful.");
+            }
+
+            queryFriendListOfUsers(users);
+            mCallback.onFriendListQueryComplete();
         });
 
         mAddFriendButton.setEnabled(false);
@@ -174,6 +204,69 @@ public class FriendListFragment extends Fragment {
         }
     }
 
+    /*
+        TODO: replace with server side function
+     */
+    private void queryFriendListOfUsers(List<User> appUsers) {
+
+        LogUtils.debug(TAG, "++queryFriendListOfUsers(List<>)");
+        for (User appUser : appUsers) {
+            String queryPath = PathUtils.combine(User.USERS_ROOT, appUser.Id, Friend.FRIENDS_ROOT);
+            FirebaseFirestore.getInstance().collection(queryPath).get().addOnCompleteListener(task -> {
+
+                if (task.isSuccessful()) {
+                    if (task.getResult() != null) {
+                        for (QueryDocumentSnapshot snapshot : task.getResult()) {
+
+                            // grab the friends of user from data store
+                            Friend friend = snapshot.toObject(Friend.class);
+                            friend.Id = snapshot.getId();
+                            if (friend.Id.equals(mUser.getEmailAsKey())) {
+
+                                // copy existing friend and change path to Id instead of emailAsKey
+                                Friend updatedFriend = new Friend(mUser);
+                                updatedFriend.Status = 1; // waiting
+                                String friendsPath = PathUtils.combine(User.USERS_ROOT, appUser.Id, Friend.FRIENDS_ROOT);
+                                FirebaseFirestore.getInstance().collection(friendsPath).document(mUser.Id).set(updatedFriend)
+                                    .addOnSuccessListener(aVoid -> {
+                                        LogUtils.debug(TAG, "Friend created successfully for %s under %s", mUser.Id, appUser.Id);
+
+                                        // remove emailAsKey item
+                                        String removePath = PathUtils.combine(User.USERS_ROOT, appUser.Id, Friend.FRIENDS_ROOT, mUser.getEmailAsKey());
+                                        FirebaseFirestore.getInstance().document(removePath).delete()
+                                            .addOnSuccessListener(aVoid1 -> LogUtils.debug(TAG, "Successfully removed old friend listing for %s under %s", mUser.getEmailAsKey(), appUser.Id))
+                                            .addOnFailureListener(e -> LogUtils.debug(TAG, "Error removing old friend listing for %s under %s", mUser.getEmailAsKey(), appUser.Id));
+                                    })
+                                    .addOnFailureListener(e -> LogUtils.warn(TAG, "Error creating friend for %s under %s - %s", mUser.Id, appUser.Id, e.getMessage()));
+
+                                // create a friend request for the current user
+                                friendsPath = PathUtils.combine(User.USERS_ROOT, mUser.Id, Friend.FRIENDS_ROOT);
+                                Friend requester = new Friend(appUser);
+                                requester.Status = 0; // pending
+                                FirebaseFirestore.getInstance().collection(friendsPath).document(requester.Id).set(requester)
+                                    .addOnSuccessListener(aVoid -> LogUtils.debug(TAG, "Friend created successfully for %s under %s", appUser.Id, mUser.Id))
+                                    .addOnFailureListener(e -> LogUtils.warn(TAG, "Error creating friend for %s under %s - %s", appUser.Id, mUser.Id, e.getMessage()));
+                            } else if (friend.Id.equals(mUser.Id) && friend.Status == 1) {
+
+                                // found waiting friend request under appUser, need to create a pending friend request under the current user
+                                String friendsPath = PathUtils.combine(User.USERS_ROOT, mUser.Id, Friend.FRIENDS_ROOT);
+                                Friend requester = new Friend(appUser);
+                                requester.Status = 0; // pending
+                                FirebaseFirestore.getInstance().collection(friendsPath).document(requester.Id).set(requester)
+                                    .addOnSuccessListener(aVoid -> LogUtils.debug(TAG, "Friend request created successfully for %s under %s", requester.Id, mUser.Id))
+                                    .addOnFailureListener(e -> LogUtils.warn(TAG, "Error creating friend request for %s under %s - %s", requester.Id, mUser.Id, e.getMessage()));
+                            }
+                        }
+                    } else {
+                        LogUtils.debug(TAG, "Task result is null.");
+                    }
+                } else {
+                    LogUtils.debug(TAG, "Task was unsuccessful.");
+                }
+            });
+        }
+    }
+
     private void updateUI() {
 
         LogUtils.debug(TAG, "++updateUI()");
@@ -181,10 +274,8 @@ public class FriendListFragment extends Fragment {
         FriendAdapter friendAdapter = new FriendAdapter(new ArrayList<>(mFriendList.values()));
         mRecyclerView.setAdapter(friendAdapter);
         mRecyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
-        if (!mFriendList.isEmpty()) {
-            mCallback.onPopulated(friendAdapter.getItemCount()); // signal activity to dismiss progress dialog
-        } else {
-            mCallback.onNoFriends();
+        if (mFriendList.isEmpty()) {
+            LogUtils.debug(TAG, "No friends were found for user.");
         }
     }
 

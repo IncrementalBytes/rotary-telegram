@@ -44,14 +44,8 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 import net.frostedbytes.android.whereareyou.fragments.ContactsFragment;
 import net.frostedbytes.android.whereareyou.fragments.FriendListFragment;
@@ -66,6 +60,7 @@ public class MainActivity extends BaseActivity implements
     NavigationView.OnNavigationItemSelectedListener,
     FriendListFragment.OnFriendListListener,
     ContactsFragment.OnContactListListener,
+    MappingFragment.OnMappingListener,
     UserPreferencesFragment.OnPreferencesListener {
 
     private static final String TAG = BASE_TAG + MainActivity.class.getSimpleName();
@@ -77,7 +72,6 @@ public class MainActivity extends BaseActivity implements
     private NavigationView mNavigationView;
     private ProgressBar mProgressBar;
 
-    //    private Map<String, Friend> mFriendList;
     private User mUser;
 
     /*
@@ -130,9 +124,10 @@ public class MainActivity extends BaseActivity implements
         navigationFullName.setText(mUser.FullName);
         TextView navigationEmail = navigationHeaderView.findViewById(R.id.navigation_text_email);
         navigationEmail.setText(mUser.Email);
+        // TODO: add PhotoURL to navigation header
 
         // check permission
-        checkLocationPermission();
+        checkPermission(Manifest.permission.ACCESS_FINE_LOCATION, LOCATION_PERMISSION_REQUEST_CODE);
     }
 
     @Override
@@ -146,17 +141,9 @@ public class MainActivity extends BaseActivity implements
             if (fragment != null && fragment.getClass().getSimpleName().equals(FriendListFragment.class.getSimpleName())) {
                 finish();
             } else {
-                replaceFragment(FriendListFragment.newInstance(mUser.Id));
+                replaceFragment(MappingFragment.newInstance(mUser));
             }
         }
-    }
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-
-        LogUtils.debug(TAG, "++onDestroy()");
-        mUser = null;
     }
 
     @SuppressWarnings("StatementWithEmptyBody")
@@ -166,10 +153,10 @@ public class MainActivity extends BaseActivity implements
         LogUtils.debug(TAG, "++onNavigationItemSelected(%s)", item.getTitle());
         switch (item.getItemId()) {
             case R.id.navigation_menu_home:
-                checkLocationPermission();
+                checkPermission(Manifest.permission.ACCESS_FINE_LOCATION, LOCATION_PERMISSION_REQUEST_CODE);
                 break;
             case R.id.navigation_menu_friends:
-                replaceFragment(FriendListFragment.newInstance(mUser.Id));
+                replaceFragment(FriendListFragment.newInstance(mUser));
                 break;
             case R.id.navigation_menu_preferences:
                 mProgressBar.setIndeterminate(false);
@@ -208,14 +195,6 @@ public class MainActivity extends BaseActivity implements
     }
 
     @Override
-    public void onPause() {
-        super.onPause();
-
-        LogUtils.debug(TAG, "++onPause()");
-        // TODO: might need to halt location timer during suspension to save battery; need testing
-    }
-
-    @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
 
         LogUtils.debug(TAG, "++onRequestPermissionResult(int, String[], int[])");
@@ -223,7 +202,7 @@ public class MainActivity extends BaseActivity implements
             case LOCATION_PERMISSION_REQUEST_CODE:
                 if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     LogUtils.debug(TAG, "ACCESS_FINE_LOCATION permission granted.");
-                    queryUser();
+                    replaceFragment(MappingFragment.newInstance(mUser));
                 } else {
                     LogUtils.debug(TAG, "ACCESS_FINE_LOCATION permission denied; halting location task.");
                 }
@@ -242,13 +221,6 @@ public class MainActivity extends BaseActivity implements
                 LogUtils.debug(TAG, "Unknown request code: %d", requestCode);
                 break;
         }
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-
-        LogUtils.debug(TAG, "++onResume()");
     }
 
     /*
@@ -270,7 +242,7 @@ public class MainActivity extends BaseActivity implements
          */
         queryPath = PathUtils.combine(User.USERS_ROOT, friend.Id, Friend.FRIENDS_ROOT);
         Friend userAsFriend = new Friend(mUser);
-        friend.Status = 2;
+        userAsFriend.Status = 2;
         FirebaseFirestore.getInstance().collection(queryPath).document(mUser.Id).set(userAsFriend)
             .addOnSuccessListener(aVoid -> LogUtils.debug(TAG, "Friend list successfully written!"))
             .addOnFailureListener(e -> LogUtils.warn(TAG, "Error writing friend list: %s", e.getMessage()));
@@ -280,12 +252,10 @@ public class MainActivity extends BaseActivity implements
     public void onAddSharingContact(String name, String email) {
 
         LogUtils.debug(TAG, "++onAddSharingContact(String, String)");
-
         replaceFragment(MappingFragment.newInstance(mUser));
 
         // look for requested contact in data store
-        Query userQuery = FirebaseFirestore.getInstance().collection(User.USERS_ROOT).whereEqualTo("Email", email);
-        userQuery.get().addOnCompleteListener(userTask -> {
+        FirebaseFirestore.getInstance().collection(User.USERS_ROOT).whereEqualTo("Email", email).get().addOnCompleteListener(userTask -> {
 
             if (userTask.isSuccessful() && userTask.getResult() != null && userTask.getResult().isEmpty()) {
                 LogUtils.debug(TAG, "Contact not found, creating placeholder for %s", email);
@@ -311,9 +281,14 @@ public class MainActivity extends BaseActivity implements
                         .addOnSuccessListener(aVoid -> LogUtils.debug(TAG, "Request successfully written for %s", email))
                         .addOnFailureListener(e -> LogUtils.warn(TAG, "Error writing request for %s - %s", email, e.getMessage()));
 
-                    // TODO: replace with server side function
-                    // add request
-                    friend = new Friend(mUser);
+                    /*
+                        TODO: replace with server side functions
+                        add request
+                     */
+                    friend = new Friend();
+                    friend.Id = mUser.Id;
+                    friend.Email = mUser.Email;
+                    friend.FullName = mUser.Email;
                     friend.Status = 0; // pending
                     queryPath = PathUtils.combine(User.USERS_ROOT, friend.Id, Friend.FRIENDS_ROOT);
                     FirebaseFirestore.getInstance().collection(queryPath).document(mUser.Id).set(friend)
@@ -346,8 +321,10 @@ public class MainActivity extends BaseActivity implements
             .addOnSuccessListener(aVoid -> LogUtils.debug(TAG, "Successfully deleted document %s", friend.Id))
             .addOnFailureListener(e -> LogUtils.error(TAG, "Failed deleting document %s - %s", friend.Id, e.getMessage()));
 
-        // TODO: replace with server side function
-        // delete mUser from friendId friend list too
+        /*
+            TODO: replace with server side functions
+            delete mUser from friendId friend list too
+         */
         queryPath = PathUtils.combine(User.USERS_ROOT, friend.Id, Friend.FRIENDS_ROOT);
         FirebaseFirestore.getInstance().collection(queryPath).document(mUser.Id).delete()
             .addOnSuccessListener(aVoid -> LogUtils.debug(TAG, "Successfully deleted document %s", mUser.Id))
@@ -362,24 +339,28 @@ public class MainActivity extends BaseActivity implements
     }
 
     @Override
-    public void onFriendListUpdated(Map<String, Friend> friendList) {
+    public void onFriendListQueryComplete() {
 
-        LogUtils.debug(TAG, "++onFriendListUpdated(Map<String, Friend>)");
-        //mFriendList = friendList;
-    }
-
-    @Override
-    public void onNoFriends() {
-
-        LogUtils.debug(TAG, "++onNoFriends()");
-        Snackbar.make(findViewById(R.id.main_drawer_layout), getString(R.string.no_friends), Snackbar.LENGTH_LONG).show();
+        LogUtils.debug(TAG, "++onFriendListQueryComplete()");
         mProgressBar.setIndeterminate(false);
     }
 
     @Override
-    public void onPopulated(int size) {
+    public void onListQueryFailed() {
 
-        LogUtils.debug(TAG, "++onPopulated(int)");
+        LogUtils.debug(TAG, "++onListQueryFailed()");
+        mProgressBar.setIndeterminate(false);
+        Snackbar.make(
+            findViewById(R.id.main_drawer_layout),
+            getString(R.string.error_friend_list_query),
+            Snackbar.LENGTH_INDEFINITE)
+            .show();
+    }
+
+    @Override
+    public void onMapUpdated() {
+
+        LogUtils.debug(TAG, "++onMapUpdated()");
         mProgressBar.setIndeterminate(false);
     }
 
@@ -392,6 +373,8 @@ public class MainActivity extends BaseActivity implements
             if (sharedPreferences.contains(UserPreferencesFragment.KEY_GET_FREQUENCY_SETTING)) {
                 mUser.Frequency = Integer.parseInt(sharedPreferences.getString(UserPreferencesFragment.KEY_GET_FREQUENCY_SETTING, "-1"));
             }
+        } else {
+            LogUtils.warn(TAG, "User was not initialized; defaulting frequency value.");
         }
 
         replaceFragment(MappingFragment.newInstance(mUser));
@@ -404,45 +387,21 @@ public class MainActivity extends BaseActivity implements
         // TODO: replaceFragment(MappingFragment.newInstance(friendId)); <-- zoom to this user's location
     }
 
-    @Override
     public void onShowContactList() {
 
         LogUtils.debug(TAG, "++onShowContactList()");
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
-            if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.READ_CONTACTS)) {
-                LogUtils.debug(TAG, "Displaying contact permission rationale to provide additional context.");
-                Snackbar.make(
-                    findViewById(R.id.main_drawer_layout),
-                    getString(R.string.permission_denied_explanation),
-                    Snackbar.LENGTH_INDEFINITE)
-                    .setAction(
-                        getString(R.string.ok),
-                        view -> ActivityCompat.requestPermissions(
-                            MainActivity.this,
-                            new String[]{Manifest.permission.READ_CONTACTS},
-                            CONTACTS_PERMISSION_REQUEST_CODE))
-                    .show();
-            } else {
-                ActivityCompat.requestPermissions(
-                    this,
-                    new String[]{Manifest.permission.READ_CONTACTS},
-                    CONTACTS_PERMISSION_REQUEST_CODE);
-            }
-        } else {
-            LogUtils.debug(TAG, "READ_CONTACTS permission granted.");
-            replaceFragment(ContactsFragment.newInstance());
-        }
+        checkPermission(Manifest.permission.READ_CONTACTS, CONTACTS_PERMISSION_REQUEST_CODE);
     }
 
     /*
         Private Support Methods
      */
-    private void checkLocationPermission() {
+    private void checkPermission(String permission, int permissionCode) {
 
-        LogUtils.debug(TAG, "++checkPermissions()");
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.ACCESS_FINE_LOCATION)) {
-                LogUtils.debug(TAG, "Displaying location permission rationale to provide additional context.");
+        LogUtils.debug(TAG, "++checkPermission()");
+        if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+            if (ActivityCompat.shouldShowRequestPermissionRationale(this, permission)) {
+                LogUtils.debug(TAG, "Displaying permission rationale to provide additional context.");
                 Snackbar.make(
                     findViewById(R.id.main_drawer_layout),
                     getString(R.string.permission_denied_explanation),
@@ -451,115 +410,26 @@ public class MainActivity extends BaseActivity implements
                         getString(R.string.ok),
                         view -> ActivityCompat.requestPermissions(
                             MainActivity.this,
-                            new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                            LOCATION_PERMISSION_REQUEST_CODE))
+                            new String[]{permission},
+                            permissionCode))
                     .show();
             } else {
                 ActivityCompat.requestPermissions(
                     this,
-                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                    LOCATION_PERMISSION_REQUEST_CODE);
+                    new String[]{permission},
+                    permissionCode);
             }
         } else {
-            LogUtils.debug(TAG, "ACCESS_FINE_LOCATION permission granted.");
-            queryUser();
-        }
-    }
-
-    private void queryFriendListOfUsers(List<User> users) {
-
-        LogUtils.debug(TAG, "++queryFriendListOfUsers(List<>)");
-        for (User user : users) {
-            String queryPath = PathUtils.combine(User.USERS_ROOT, user.Id, Friend.FRIENDS_ROOT);
-            FirebaseFirestore.getInstance().collection(queryPath).get().addOnCompleteListener(task -> {
-
-                if (task.isSuccessful()) {
-                    if (task.getResult() != null) {
-                        for (QueryDocumentSnapshot snapshot : task.getResult()) {
-
-                            // grab the friends of user from data store
-                            Friend friend = snapshot.toObject(Friend.class);
-                            friend.Id = snapshot.getId();
-                            if (friend.getEmailAsKey().equals(mUser.getEmailAsKey())) {
-
-                                // copy existing friend and change path to Id instead of emailAsKey
-                                Friend updatedFriend = new Friend(mUser);
-                                updatedFriend.Status = 1; // waiting
-                                String friendsPath = PathUtils.combine(User.USERS_ROOT, user.Id, Friend.FRIENDS_ROOT);
-                                FirebaseFirestore.getInstance().collection(friendsPath).document(mUser.Id).set(updatedFriend)
-                                    .addOnSuccessListener(aVoid -> {
-                                        LogUtils.debug(TAG, "Friend created successfully.");
-
-                                        // remove emailAsKey item
-                                        String removePath = PathUtils.combine(User.USERS_ROOT, user.Id, Friend.FRIENDS_ROOT, mUser.getEmailAsKey());
-                                        FirebaseFirestore.getInstance().document(removePath).delete();
-                                    })
-                                    .addOnFailureListener(e -> LogUtils.warn(TAG, "Error creating friend: %s", e.getMessage()));
-
-                                // create a friend request for the current user
-                                friendsPath = PathUtils.combine(User.USERS_ROOT, mUser.Id, Friend.FRIENDS_ROOT);
-                                Friend requester = new Friend(user);
-                                requester.Status = 0; // pending
-                                FirebaseFirestore.getInstance().collection(friendsPath).document(requester.Id).set(requester)
-                                    .addOnSuccessListener(aVoid -> LogUtils.debug(TAG, "Friend created successfully."))
-                                    .addOnFailureListener(e -> LogUtils.warn(TAG, "Error creating friend: %s", e.getMessage()));
-                            } else if (friend.Id.equals(mUser.Id)) {
-                                // create a friend request for the current user
-                                String friendsPath = PathUtils.combine(User.USERS_ROOT, mUser.Id, Friend.FRIENDS_ROOT);
-                                Friend requester = new Friend(user);
-                                requester.Status = 0; // pending
-                                FirebaseFirestore.getInstance().collection(friendsPath).document(requester.Id).set(requester)
-                                    .addOnSuccessListener(aVoid -> LogUtils.debug(TAG, "Friend created successfully."))
-                                    .addOnFailureListener(e -> LogUtils.warn(TAG, "Error creating friend: %s", e.getMessage()));
-                            }
-                        }
-
-                        mProgressBar.setIndeterminate(false);
-                        replaceFragment(MappingFragment.newInstance(mUser));
-                    } else {
-                        LogUtils.debug(TAG, "Task result is null.");
-                    }
-                } else {
-                    LogUtils.debug(TAG, "Task was unsuccessful.");
-                }
-            });
-        }
-    }
-
-    private void queryUser() {
-
-        LogUtils.debug(TAG, "++queryUser()");
-        String userQueryPath = PathUtils.combine(User.USERS_ROOT, mUser.Id);
-        FirebaseFirestore.getInstance().document(userQueryPath).get().addOnCompleteListener(task -> {
-
-            if (task.isSuccessful()) {
-                DocumentSnapshot document = task.getResult();
-                User queriedUser = null;
-                if (document != null) {
-                    // found this user's data
-                    queriedUser = document.toObject(User.class);
-                    if (queriedUser != null) {
-                        queriedUser.Id = document.getId();
-                    }
-                }
-
-                if (queriedUser == null) {
-                    LogUtils.debug(TAG, "User, %s, not found; creating.", mUser.Id);
-                    queriedUser = new User();
-                    queriedUser.Id = mUser.Id;
-                    queriedUser.Email = mUser.Email;
-                    queriedUser.FullName = mUser.FullName;
-                    FirebaseFirestore.getInstance().collection(User.USERS_ROOT).document(mUser.Id).set(queriedUser)
-                        .addOnSuccessListener(aVoid -> LogUtils.debug(TAG, "User created successfully."))
-                        .addOnFailureListener(e -> LogUtils.warn(TAG, "Error creating user: %s", e.getMessage()));
-                }
-
-                // scan existing system user's friends list for current user's emailAsKey/friend requests
-                updateFriendLists(queriedUser);
-            } else {
-                LogUtils.error(TAG, "get failed with ", task.getException());
+            LogUtils.debug(TAG, "%s permission granted.", permission);
+            switch (permissionCode) {
+                case CONTACTS_PERMISSION_REQUEST_CODE:
+                    replaceFragment(ContactsFragment.newInstance());
+                    break;
+                case LOCATION_PERMISSION_REQUEST_CODE:
+                    replaceFragment(MappingFragment.newInstance(mUser));
+                    break;
             }
-        });
+        }
     }
 
     private void replaceFragment(Fragment fragment) {
@@ -570,45 +440,6 @@ public class MainActivity extends BaseActivity implements
         fragmentTransaction.replace(R.id.main_fragment_container, fragment);
         fragmentTransaction.commit();
         updateTitleAndDrawer(fragment);
-    }
-
-    /*
-        TODO: replaced with server side functions
-     */
-    private void updateFriendLists(User searchForUser) {
-
-        LogUtils.debug(TAG, "++updateFriendLists(User)");
-
-        // get ready to move onto mapping fragment
-        mUser = searchForUser;
-        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
-        if (sharedPreferences.contains(UserPreferencesFragment.KEY_GET_FREQUENCY_SETTING)) {
-            mUser.Frequency = Integer.parseInt(sharedPreferences.getString(UserPreferencesFragment.KEY_GET_FREQUENCY_SETTING, "-1"));
-        }
-
-        List<User> users = new ArrayList<>();
-        FirebaseFirestore.getInstance().collection(User.USERS_ROOT).get().addOnCompleteListener(task -> {
-
-            if (task.isSuccessful()) {
-                if (task.getResult() != null) {
-
-                    // look through all users of the system; ignoring the record for the current user
-                    for (QueryDocumentSnapshot snapshot : task.getResult()) {
-                        if (snapshot.getId().equals(searchForUser.Id)) {
-                            continue;
-                        }
-
-                        users.add(snapshot.toObject(User.class));
-                    }
-                } else {
-                    LogUtils.debug(TAG, "Task result is null.");
-                }
-            } else {
-                LogUtils.debug(TAG, "Task was unsuccessful.");
-            }
-
-            queryFriendListOfUsers(users);
-        });
     }
 
     private void updateTitleAndDrawer(Fragment fragment) {

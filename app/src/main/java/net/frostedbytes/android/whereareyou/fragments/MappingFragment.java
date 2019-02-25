@@ -44,7 +44,6 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 import com.google.firebase.firestore.SetOptions;
 
@@ -68,7 +67,16 @@ public class MappingFragment extends Fragment implements OnMapReadyCallback {
 
     private static final String TAG = BASE_TAG + MappingFragment.class.getSimpleName();
 
+    public interface OnMappingListener {
+
+        void onMapUpdated();
+    }
+
+    private OnMappingListener mCallback;
+
     private List<Friend> mFriendList;
+    private double mPreviousLatitude;
+    private double mPreviousLongitude;
     private User mUser;
 
     private final Handler mHandler = new Handler();
@@ -77,8 +85,6 @@ public class MappingFragment extends Fragment implements OnMapReadyCallback {
     private GoogleMap mGoogleMap;
     private MapView mMapView;
     private FusedLocationProviderClient mFusedLocationClient;
-
-    private ListenerRegistration mListenerRegistration;
 
     public static MappingFragment newInstance(User user) {
 
@@ -95,9 +101,15 @@ public class MappingFragment extends Fragment implements OnMapReadyCallback {
         super.onAttach(context);
 
         LogUtils.debug(TAG, "++onAttach(Context)");
+        try {
+            mCallback = (OnMappingListener) context;
+        } catch (ClassCastException e) {
+            throw new ClassCastException("Not all callback methods have been implemented for " + context.toString());
+        }
+
         Bundle arguments = getArguments();
         if (arguments != null) {
-            mUser = (User) arguments.getSerializable(BaseActivity.ARG_USER);
+            mUser = (User)arguments.getSerializable(BaseActivity.ARG_USER);
         } else {
             LogUtils.error(TAG, "Arguments were null.");
         }
@@ -113,30 +125,9 @@ public class MappingFragment extends Fragment implements OnMapReadyCallback {
         mMapView.onCreate(savedInstanceState);
         mMapView.onResume();
         mMapView.getMapAsync(this);
-
         if (getActivity() != null) {
             mFusedLocationClient = LocationServices.getFusedLocationProviderClient(getActivity());
         }
-
-        // setup listener on this user's friend path for updates
-        String queryPath = PathUtils.combine(User.USERS_ROOT, mUser.Id, Friend.FRIENDS_ROOT);
-        FirebaseFirestore.getInstance().collection(queryPath).addSnapshotListener((documentSnapshot, e) -> {
-
-            if (e != null) {
-                LogUtils.warn(TAG, "Listener failed: %s", e.getMessage());
-            } else if (documentSnapshot != null){
-                mFriendList = new ArrayList<>();
-                for (QueryDocumentSnapshot snapshot : documentSnapshot) {
-                    mFriendList.add(snapshot.toObject(Friend.class));
-                }
-
-                if (mGoogleMap != null) {
-                    updateMap();
-                }
-            } else {
-                LogUtils.warn(TAG, "Collection listener returned a null snapshot.");
-            }
-        });
 
         startLocationRetrievalTask();
         return view;
@@ -149,10 +140,6 @@ public class MappingFragment extends Fragment implements OnMapReadyCallback {
 
         LogUtils.debug(TAG, "++onDestroy()");
         stopTimer();
-        if (mListenerRegistration != null) {
-            mListenerRegistration.remove();
-            mListenerRegistration = null;
-        }
     }
 
     @Override
@@ -174,6 +161,13 @@ public class MappingFragment extends Fragment implements OnMapReadyCallback {
         if (getActivity() != null &&
             ActivityCompat.checkSelfPermission(getActivity(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             mGoogleMap.setMyLocationEnabled(true);
+            if (mUser != null && (mUser.Latitude > 0 && mUser.Longitude > 0)) {
+                mGoogleMap.clear();
+                LatLng position = new LatLng(mUser.Latitude, mUser.Longitude);
+                mGoogleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(position, 15));
+                mGoogleMap.animateCamera(CameraUpdateFactory.zoomIn());
+                mGoogleMap.animateCamera(CameraUpdateFactory.zoomTo(12), 2000, null);
+            }
         } else {
             LogUtils.warn(TAG, "User marker removed due to permissions.");
         }
@@ -235,7 +229,7 @@ public class MappingFragment extends Fragment implements OnMapReadyCallback {
                     /*
                         TODO: replace with server side function
                      */
-                    // update location for all friends
+                    // update this user's location for all of this user's friends
                     if (mFriendList != null) {
                         Friend asFriend = new Friend(mUser);
                         asFriend.Longitude = mUser.Longitude;
@@ -246,13 +240,13 @@ public class MappingFragment extends Fragment implements OnMapReadyCallback {
                                 LogUtils.debug(TAG, "Attempting to update %s location under %s friend list.", mUser.Id, friend.Id);
                                 String queryPath = PathUtils.combine(User.USERS_ROOT, friend.Id, Friend.FRIENDS_ROOT);
                                 FirebaseFirestore.getInstance().collection(queryPath).document(mUser.Id).set(asFriend, SetOptions.merge())
-                                    .addOnSuccessListener(aVoid -> LogUtils.debug(TAG, "Location information successfully merged."))
-                                    .addOnFailureListener(e -> LogUtils.warn(TAG, "Error merging location information: %s", e.getMessage()));
+                                    .addOnSuccessListener(aVoid -> LogUtils.debug(TAG, "Location information successfully merged for %s under %s", mUser.Id, friend.Id))
+                                    .addOnFailureListener(e -> LogUtils.warn(TAG, "Error merging location information for %s under %s - %s", mUser.Id, friend.Id, e.getMessage()));
                             }
                         }
                     }
                 })
-                .addOnFailureListener(e -> LogUtils.error(TAG, "Location client getLastLocation() failed: %s", e.getMessage()));
+                .addOnFailureListener(e -> LogUtils.error(TAG, "Location client getLastLocation() failed for %s - %s", mUser.Id, e.getMessage()));
         }
     }
 
@@ -305,34 +299,46 @@ public class MappingFragment extends Fragment implements OnMapReadyCallback {
     private void updateMap() {
 
         LogUtils.debug(TAG, "++updateMap()");
-        if (mGoogleMap != null && mUser != null) {
+
+        if (mGoogleMap != null) {
             mGoogleMap.clear();
-            LatLng position = new LatLng(mUser.Latitude, mUser.Longitude);
-            mGoogleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(position, 15));
-            mGoogleMap.animateCamera(CameraUpdateFactory.zoomIn());
-            mGoogleMap.animateCamera(CameraUpdateFactory.zoomTo(15), 2000, null);
-        }
 
-        // add friend's of user's location to map
-        if (mGoogleMap != null && mFriendList != null) {
-            for (int index = 0; index < mFriendList.size(); index++) {
-                if (mFriendList.get(index).Status != 2) {
-                    continue;
-                }
-
-                LatLng position = new LatLng(mFriendList.get(index).Latitude, mFriendList.get(index).Longitude);
-                Drawable markerDrawable = ResourcesCompat.getDrawable(getResources(), R.drawable.ic_pin_light, null);
-                if (markerDrawable != null) {
-                    BitmapDescriptor bitmap = getMarkerIconFromDrawable(markerDrawable);
-                    MarkerOptions marker = new MarkerOptions()
-                        .position(position)
-                        .title(mFriendList.get(index).FullName)
-                        .icon(bitmap);
-                    mGoogleMap.addMarker(marker);
-                } else {
-                    LogUtils.debug(TAG, "Unable to create marker resource.");
-                }
+            // add user's location
+            if (mPreviousLatitude == 0 && mPreviousLongitude == 0) {
+                LatLng userPosition = new LatLng(mUser.Latitude, mUser.Longitude);
+                mGoogleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(userPosition, 15));
+                mGoogleMap.animateCamera(CameraUpdateFactory.zoomIn());
+                mGoogleMap.animateCamera(CameraUpdateFactory.zoomTo(12), 2000, null);
+                mPreviousLatitude = mUser.Latitude;
+                mPreviousLongitude = mUser.Longitude;
             }
+
+            // setup listener on this user's friend path for updates
+            String queryPath = PathUtils.combine(User.USERS_ROOT, mUser.Id, Friend.FRIENDS_ROOT);
+            FirebaseFirestore.getInstance().collection(queryPath).whereEqualTo("Status", 2).get().addOnCompleteListener(task -> {
+
+                if (task.isSuccessful() && task.getResult() != null) {
+                    mFriendList = new ArrayList<>();
+                    for (QueryDocumentSnapshot snapshot : task.getResult()) {
+                        Friend friend = snapshot.toObject(Friend.class);
+                        mFriendList.add(friend);
+                        LatLng friendPosition = new LatLng(friend.Latitude, friend.Longitude);
+                        Drawable markerDrawable = ResourcesCompat.getDrawable(getResources(), R.drawable.ic_pin_light, null);
+                        if (markerDrawable != null) {
+                            BitmapDescriptor bitmap = getMarkerIconFromDrawable(markerDrawable);
+                            MarkerOptions friendMarker = new MarkerOptions()
+                                .position(friendPosition)
+                                .title(friend.FullName)
+                                .icon(bitmap);
+                            mGoogleMap.addMarker(friendMarker);
+                        } else {
+                            LogUtils.debug(TAG, "Unable to create marker resource.");
+                        }
+                    }
+                }
+
+                mCallback.onMapUpdated();
+            });
         }
     }
 }
