@@ -7,9 +7,9 @@ Add google_maps_key entry for both debug and release values (do NOT commit!):
 3) OK
 4) Create a new file, google_maps_api.xml
 5) Add:
-<resources>
-    <string name="google_maps_key">[API_KEY]</string>
-</resources>
+&lt;resources&gt;
+    &lt;string name="google_maps_key"&gt;[API_KEY]&lt;/string&gt;
+&lt;/resources&gt;
 6) Replace API_KEY with value from console.developers.google.com/apis
 7) Repeat for again for the RELEASE configuration
 
